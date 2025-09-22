@@ -1,7 +1,0 @@
-pyproject.toml
-RDevEngine.egg-info/PKG-INFO
-RDevEngine.egg-info/SOURCES.txt
-RDevEngine.egg-info/dependency_links.txt
-RDevEngine.egg-info/requires.txt
-RDevEngine.egg-info/top_level.txt
-core/window.py

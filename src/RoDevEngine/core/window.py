@@ -1,7 +1,8 @@
 from __future__ import annotations
 from typing_extensions import overload
 
-from Engine.core.logger import Logger
+from RoDevEngine.logger import Logger
+from object import Object
 
 import glfw
 import sys
@@ -14,7 +15,13 @@ def error_handler(e_code:str, desc:str):
 glfw.set_error_callback(error_handler)
 
 class Window:
-    def __init__(self):
+    @overload
+    def __init__(self): ...
+    @overload
+    def __init__(self, width:int, height:int): ...
+    @overload
+    def __init__(self, width:int, height:int, name:str): ...
+    def __init__(self, width=800, height=600, name:str = "GLFW Window"):
         global glfw_initalized
 
         if not glfw_initalized:
@@ -24,7 +31,7 @@ class Window:
         glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
         glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
 
-        window = glfw.create_window(800, 600, "GLFW window", None, None)
+        window = glfw.create_window(width, height, name, None, None)
         glfw.make_context_current(window)
 
         Logger("CORE").log_debug("GLFW initalized successfully!")
