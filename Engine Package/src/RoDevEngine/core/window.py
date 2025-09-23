@@ -1,11 +1,12 @@
 from __future__ import annotations
 from typing_extensions import overload
 
-from RoDevEngine.logger import Logger
-from object import Object
+from RoDevEngine.core.logger import Logger
+from RoDevEngine.core.scene_manager import SceneManager
+from RoDevEngine.object import Object
 
 import glfw
-import sys
+import sys, os, OpenGL.GL as gl
 
 glfw_initalized = False
 
@@ -27,6 +28,8 @@ class Window:
         if not glfw_initalized:
             glfw.init()
 
+        self.logger = Logger("CORE")
+
         glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
         glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
         glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
@@ -34,15 +37,21 @@ class Window:
         window = glfw.create_window(width, height, name, None, None)
         glfw.make_context_current(window)
 
-        Logger("CORE").log_debug("GLFW initalized successfully!")
+        self.logger.log_debug("GLFW initalized successfully!")
+
+        gl.glClearColor(255, 0, 255, 255)
 
         self.window = window
+        compiled = os.path.isfile(".rproj") # If there is a .rproj file, then the project has not been built yet.
+        self.scene_manager = SceneManager(compiled)
 
     def should_close(self):
         return glfw.window_should_close(self.window)
 
     def update(self):
         glfw.poll_events()
+
+        gl.glClear(gl.GL_DEPTH_BUFFER_BIT, gl.GL_COLOR_BUFFER_BIT)
 
         glfw.swap_buffers(self.window)
 

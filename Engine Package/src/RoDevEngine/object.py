@@ -1,7 +1,7 @@
 from typing_extensions import overload
-from src.RoDevEngine.core.logger import Logger
+from RoDevEngine.core.logger import Logger
 
-import behavior
+import RoDevEngine.scripts.behavior as behavior
 
 class Object:
     @overload
@@ -12,7 +12,7 @@ class Object:
 
     def __init__(self, name, *components):
         self.name = name
-        self.components = []
+        self.components : list[behavior.Behavior] = []
         for comp in components:
             if issubclass(type(comp), behavior.Behavior):
                 self.components.append(comp)
@@ -20,9 +20,19 @@ class Object:
             else:
                 Logger("CORE").log_error(f"Object of type {type(comp).__name__} is not a Behavior.")
 
+    def update(self, dt):
+        for component in self.components:
+            component.update(dt)
+
+    def fixed_update(self):
+        for component in self.components:
+            component.fixed_update()
+
     def get_component(self, component_class):
         for component in self.components:
             if isinstance(component, component_class):
                 print("test")
 
-Object("test", Object("test2")).get_component(Object)
+    def add_component(self, component):
+        if issubclass(type(component), behavior):
+            self.components.append(component)

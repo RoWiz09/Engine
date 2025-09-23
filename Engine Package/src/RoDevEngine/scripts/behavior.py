@@ -16,8 +16,18 @@ class Behavior:
         """
         pass
 
-    def on_unloaded(self):
+    def on_unloaded(self, scene_name:str):
         """
             Called when the scene unloads!
+            Args:
+                scene_name (str): The name of the unloaded scene.
+        """
+        pass
+
+    def on_scene_load(self, scene_name:str):
+        """
+            Called when the scene loads!
+            Args:
+                scene_name (str): The name of the loaded scene.
         """
         pass

@@ -1,8 +1,10 @@
+from RoDevEngine.core.settings import Settings
+
 def init(window_width = 800, window_height = 600, window_name = "Test", **logger_kwargs):
     from RoDevEngine.core.window import Window
     from RoDevEngine.core.logger import configure_loggers
 
-    configure_loggers(logger_kwargs)
+    configure_loggers(kwargs=logger_kwargs)
 
     return Window(window_width, window_height, window_name)
 
