@@ -10,10 +10,10 @@ import sys, os, OpenGL.GL as gl
 
 glfw_initalized = False
 
-def error_handler(e_code:str, desc:str):
+def glfw_error_handler(e_code:str, desc:str):
     Logger("CORE").log_fatal(f"GLFW Error [{e_code}] : {desc}")
 
-glfw.set_error_callback(error_handler)
+glfw.set_error_callback(glfw_error_handler)
 
 class Window:
     @overload
@@ -34,15 +34,17 @@ class Window:
         glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
         glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
 
-        window = glfw.create_window(width, height, name, None, None)
-        glfw.make_context_current(window)
+        self.window = glfw.create_window(width, height, name, None, None)
+        glfw.make_context_current(self.window)
 
         self.logger.log_debug("GLFW initalized successfully!")
 
-        gl.glClearColor(255, 0, 255, 255)
+        gl.glClearColor(0.2, 0.2, 1, 1)
 
-        self.window = window
-        compiled = os.path.isfile(".rproj") # If there is a .rproj file, then the project has not been built yet.
+        gl.glEnable(gl.GL_CULL_FACE)
+        gl.glEnable(gl.GL_DEPTH_TEST)
+
+        compiled = not os.path.isfile(".rproj") # If there is a .rproj file, then the project has not been built yet.
         self.scene_manager = SceneManager(compiled)
 
     def should_close(self):
@@ -51,7 +53,11 @@ class Window:
     def update(self):
         glfw.poll_events()
 
-        gl.glClear(gl.GL_DEPTH_BUFFER_BIT, gl.GL_COLOR_BUFFER_BIT)
+        gl.glViewport(0, 0, *glfw.get_window_size(self.window))
+
+        gl.glClear(gl.GL_DEPTH_BUFFER_BIT | gl.GL_COLOR_BUFFER_BIT)
+
+        self.scene_manager.update_scene()
 
         glfw.swap_buffers(self.window)
 

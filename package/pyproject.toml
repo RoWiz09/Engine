@@ -4,7 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "RoDevEngine"
-version = "0.0.1"
+version = "0.0.1-ALPHA0"
 dependencies = [
-  "glfw"
+  "glfw",
+  "typing_extensions"
 ]

@@ -33,6 +33,13 @@ class Object:
             if isinstance(component, component_class):
                 print("test")
 
+    def add_components(self, *components):
+        for component in components:
+            if issubclass(type(component), behavior.Behavior):
+                self.components.append(component)
+            else:
+                Logger("CORE").log_error(f"Object of type {type(component).__name__} is not a Behavior.")
+
     def add_component(self, component):
         if issubclass(type(component), behavior):
             self.components.append(component)
