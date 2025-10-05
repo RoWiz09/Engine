@@ -1,0 +1,4 @@
+{
+    "VertexShader": "assets/GhostEngine/base_shader.vert",
+    "FragmentShader": "assets/GhostEngine/base_shader.frag"
+}

@@ -50,19 +50,19 @@ class Logger:
         self.logger_name = logger_name
         self.file = _log_file
 
-    def _write(self, level: LoggingLevels, style: str, label: str, msg: str):
+    def _write(self, level: LoggingLevels, style: str, label: str, msg: str, override: bool):
         global log_to_console, logging_level
-        if logging_level.value <= level.value:
+        if logging_level.value <= level.value or override:
             self.file.write(f"[{self.logger_name}] - {label} : {msg}\n")
             self.file.flush()
             if log_to_console:
                 print(f"{style}[{self.logger_name}] - {label} : {msg}{RESET_STYLE}")
 
-    def log_debug(self, msg: str):   self._write(LoggingLevels.DEBUG,   DEBUG_STYLE,   "DEBUG", msg)
-    def log_info(self, msg: str):    self._write(LoggingLevels.INFO,    INFO_STYLE,    "INFO", msg)
-    def log_warning(self, msg: str): self._write(LoggingLevels.WARNING, WARNING_STYLE, "WARNING", msg)
-    def log_error(self, msg: str):   self._write(LoggingLevels.ERROR,   ERROR_STYLE,   "ERROR", msg)
+    def log_debug(self, msg: str, override:bool = False):   self._write(LoggingLevels.DEBUG,   DEBUG_STYLE,   "DEBUG", msg,   override)
+    def log_info(self, msg: str, override:bool = False):    self._write(LoggingLevels.INFO,    INFO_STYLE,    "INFO", msg,    override)
+    def log_warning(self, msg: str, override:bool = False): self._write(LoggingLevels.WARNING, WARNING_STYLE, "WARNING", msg, override)
+    def log_error(self, msg: str, override:bool = False):   self._write(LoggingLevels.ERROR,   ERROR_STYLE,   "ERROR", msg,   override)
 
-    def log_fatal(self, msg: str):
-        self._write(LoggingLevels.FATAL, FATAL_STYLE, "FATAL", msg)
+    def log_fatal(self, msg: str, override:bool = True):
+        self._write(LoggingLevels.FATAL, FATAL_STYLE, "FATAL", msg, override)
         raise SystemExit()

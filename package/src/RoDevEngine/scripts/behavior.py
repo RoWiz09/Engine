@@ -2,16 +2,17 @@ from RoDevEngine.core.logger import Logger
 
 class Behavior:
     def __init__(self, gameobject):
-        self._gameobject = gameobject
-        self._enabled = True
+        from RoDevEngine.object import Object
+        self.__gameobject: Object = gameobject
+        self.__enabled = True
     
     @property
     def gameobject(self):
-        return self._gameobject
+        return self.__gameobject
     
     @property
     def enabled(self):
-        return self._enabled
+        return self.__enabled
     
     @enabled.setter
     def enabled(self, value: bool):
