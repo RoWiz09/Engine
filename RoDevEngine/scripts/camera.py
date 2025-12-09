@@ -3,6 +3,8 @@ from pyglm import glm
 
 class Camera(Behavior):
     def __init__(self, gameobject):
+        super().__init__(gameobject)
+                
         self.rotation_mod = glm.vec3()
         self.position_mod = glm.vec3()
 

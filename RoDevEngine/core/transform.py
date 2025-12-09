@@ -67,6 +67,18 @@ class Transform:
         self.__pos += delta
 
     @overload
+    def move_with_rotation(self, dx:float, dy:float, dz:float): ...
+
+    @overload
+    def move_with_rotation(self, delta: glm.vec3): ...
+
+    def move_with_rotation(self, dx: float = 0, dy: float = 0, dz: float = 0, delta: glm.vec3 = glm.vec3(0)):
+        if delta == glm.vec3(0):
+            delta = glm.vec3(dx, dy, dz)
+
+        self.__pos += delta * self.rot
+
+    @overload
     def rotate_by_degrees(self, dx: float, dy: float, dz: float): ...
 
     @overload

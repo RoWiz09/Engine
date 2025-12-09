@@ -1,10 +1,11 @@
-from RoDevEngine.rendering.shader_program import ShaderProgram
-from RoDevEngine.rendering.material import Material
-from RoDevEngine.scripts.behavior import Behavior
-from RoDevEngine.core.transform import Transform
-from RoDevEngine.scripts.light import Pointlight, Spotlight
-from RoDevEngine.core.packer import Pack
-from RoDevEngine.object import Object 
+from ..rendering.shader_program import ShaderProgram
+from ..scripts.camera import Camera
+from ..rendering.material import Material
+from ..scripts.behavior import Behavior
+from .transform import Transform
+from ..scripts.light import Pointlight, Spotlight
+from .packer import Pack
+from ..object import Object 
 
 from pyglm import glm
 
@@ -37,10 +38,10 @@ class SceneManager:
         self.last_time = glfw.get_time()
         self.accumulator = 0.0
 
+        self.active_camera: Camera = None
+
         # Load first scene by default
         self.load_scene_index(0)
-
-        self.active_camera = None
 
     def get_scenes(self) -> dict[str, str]:
         """Returns dict of scene_name -> file_path"""
@@ -185,6 +186,10 @@ class SceneManager:
                         setattr(behavior, var_name, value)
                     behavior.enabled = comp_data.get("active", True)
                     scripts.append(behavior)
+
+                    if not self.active_camera and isinstance(behavior, Camera) and behavior.enabled:
+                        self.active_camera = behavior
+                        
                 else:
                     Logger("CORE").log_warning(
                         f"Script {cls.__name__} is not a subclass of Behavior and cannot be applied to {object_name}!"
@@ -245,7 +250,12 @@ class SceneManager:
         self.accumulator += dt
 
         if self.active_camera:
-            view = glm.lookAt(glm.vec3(0, 0, -5), glm.vec3(0, 0, -5)+glm.vec3(0, 0, 5), glm.vec3(0, 1, 0))
+            camera = self.active_camera
+            view = glm.lookAt(
+                camera.position_mod + camera.gameobject.transform.pos, 
+                camera.position_mod + camera.gameobject.transform.pos + glm.vec3(0, 0, 1) * (camera.rotation_mod * camera.gameobject.transform.rot), 
+                glm.vec3(0, 1, 0) * (camera.rotation_mod * camera.gameobject.transform.rot)
+            )
             width, height = glfw.get_window_size(glfw.get_current_context())
             proj = glm.perspective(glm.radians(60), width/height, 0.01, 1000)
 

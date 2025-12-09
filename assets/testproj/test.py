@@ -20,12 +20,19 @@ class Test(Behavior):
 
         move_x = 0
         if Input().get_key(KeyCodes.k_A):
-            move_x -= 10*dt
-
-        elif Input().get_key(KeyCodes.k_D):
             move_x += 10*dt
 
-        self.gameobject.transform.move(move_x, 0, move_z)
+        elif Input().get_key(KeyCodes.k_D):
+            move_x -= 10*dt
+
+        z_rot = 0
+        if Input().get_key(KeyCodes.k_E):
+            z_rot += 10*dt
+        elif Input().get_key(KeyCodes.k_Q):
+            z_rot -= 10*dt
+
+        self.gameobject.transform.move_with_rotation(move_x, 0, move_z)
+        self.gameobject.transform.rotate_by_degrees(0, 0, z_rot)
 
 class Test2(Behavior):
     def __init__(self, gameobject):
