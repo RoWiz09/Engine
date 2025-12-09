@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from RoDevEngine.core.logger import Logger
 
+import io
+
 import os
 import struct
 import json
@@ -18,8 +20,8 @@ class Pack:
         self.files : list[str] = []
         with open("pak_master.mrpk", "rb") as master_pak:
             # Read and validate header
-            header_struct = struct.Struct("<4sHH")
-            magic, version, entry_count = header_struct.unpack(master_pak.read(header_struct.size))
+            header_struct = struct.Struct("<4sHHH")
+            magic, version, entry_count, packs_offset = header_struct.unpack(master_pak.read(header_struct.size))
             if magic != b"RPKM":
                 raise ValueError("Invalid pak master file.")
 
@@ -40,6 +42,9 @@ class Pack:
 
             self.toc = {name: entry for name, entry in toc_entries.items()}
             self.files.extend([name for name in toc_entries.keys()])
+
+    def has_pack(self, pack_name: str):
+        pass
     
     def get(self, asset_name: str) -> bytes:
         if asset_name not in self.toc:
@@ -72,8 +77,8 @@ class Pack:
     @staticmethod
     def write_packs():
         """
-            Used when building a project made in the engine. \
-            TODO: Implement multi-file packing
+            Used when building a project made in the engine. \n
+            TODO: Add DLC Packing
         """
 
         assets = {}
@@ -162,15 +167,17 @@ class Pack:
             version = 1
             master_pak.write(header_struct.pack(magic, version, len(toc_entries)))
 
-            # Each entry in the TOC (length of entry name (H), entry name, length of pack name (H), pack name, offset (I))
-            for entry in toc_entries:
-                master_pak.write(struct.pack("<H", len(entry["name"].replace(b"\\", b"/"))))
-                master_pak.write(entry["name"].replace(b"\\", b"/"))
-                master_pak.write(struct.pack("<H", len(entry["file"])))
-                master_pak.write(entry["file"])
-                master_pak.write(struct.pack("<I", entry["offset"]))
+            byte_content = b""
 
-if __name__ == "__main__":
-    pack = Pack()
-    print(pack.get_as_json_dict("assets/testproj/test_scene.rscene"))
-    print(pack.get_as_json_dict("assets/GhostEngine/base_shader.rshader"))
+            # Each entry in the TOC (length of entry name (H), entry name, length of pack name (H), pack name, and offset (I))
+            for entry in toc_entries:
+                byte_content += struct.pack("<H", len(entry["name"].replace(b"\\", b"/")))
+                byte_content += entry["name"].replace(b"\\", b"/")
+                byte_content += struct.pack("<H", len(entry["file"]))
+                byte_content += entry["file"]
+                byte_content += struct.pack("<I", entry["offset"])
+
+            packs_offset = header_struct.size + 2 + len(byte_content)
+            master_pak.write(struct.pack("<H", packs_offset))
+
+            master_pak.write(byte_content)

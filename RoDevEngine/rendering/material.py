@@ -35,6 +35,8 @@ class Material:
         Logger("CORE").log_debug(f"Material created with shader: {shader}, properties: {self.properties}")
 
     def use(self):
+        gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture)
+        
         self.shader.use()
         for property, value in self.properties.items():
             if isinstance(value, dict) and "type" in value and "value" in value:
@@ -42,6 +44,8 @@ class Material:
                     self.shader.set_vec3(property, tuple(value["value"]))
                 elif value["type"] == "float":
                     self.shader.set_float(property, float(value["value"]))
-                # Add more property types as needed
+                elif value["type"] == "vec2":
+                    self.shader.set_vec2(property, tuple(value["value"]))
+
             else:
                 Logger("CORE").log_warning(f"Property {property} has an invalid format: {value}")

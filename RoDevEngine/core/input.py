@@ -1,5 +1,4 @@
 from enum import Enum
-
 import glfw
 
 class KeyCodes(Enum):
@@ -80,31 +79,48 @@ class KeyCodes(Enum):
     k_delete = glfw.KEY_DELETE
     k_backspace = glfw.KEY_BACKSPACE
 
+    k_escape = glfw.KEY_ESCAPE    
+
 class Input:
     _instance = None
+    _initialized = False
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
             cls._instance = super(Input, cls).__new__(cls)
         return cls._instance
-    
+
     def __init__(self):
-        self.__keys_pressed_now = []
-        self.__keys_pressed_last = []
+        if Input._initialized:
+            return  # Prevent reinitialization across scenes or scripts
+        self.__keys_pressed_now = set()
+        self.__keys_pressed_last = set()
+        Input._initialized = True
 
     def get_inputs(self, window):
+        """Polls GLFW and updates key states each frame."""
         self.__keys_pressed_last = self.__keys_pressed_now.copy()
         self.__keys_pressed_now.clear()
+
+        # Collect all pressed keys
         for key in KeyCodes:
             if glfw.get_key(window, key.value) == glfw.PRESS:
-                self.__keys_pressed_now.append(key.value)
+                self.__keys_pressed_now.add(key.value)
 
-    def get_key_down(self, keycode: KeyCodes):
-        return keycode.value in self.__keys_pressed_now and keycode.value not in self.__keys_pressed_last
-    
-    def get_key(self, keycode: KeyCodes):
+    def get_key_down(self, keycode: KeyCodes) -> bool:
+        """True only on the frame the key was pressed."""
+        return (
+            keycode.value in self.__keys_pressed_now
+            and keycode.value not in self.__keys_pressed_last
+        )
+
+    def get_key(self, keycode: KeyCodes) -> bool:
+        """True while the key is being held."""
         return keycode.value in self.__keys_pressed_now
-    
-    def get_key_up(self, keycode: KeyCodes):
-        return keycode.value in self.__keys_pressed_last and keycode.value not in self.__keys_pressed_now
-    
+
+    def get_key_up(self, keycode: KeyCodes) -> bool:
+        """True only on the frame the key was released."""
+        return (
+            keycode.value in self.__keys_pressed_last
+            and keycode.value not in self.__keys_pressed_now
+        )

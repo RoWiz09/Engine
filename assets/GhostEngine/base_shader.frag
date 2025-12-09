@@ -1,95 +1,139 @@
 #version 330 core
 
-in vec3 vWorldPos;
+uniform vec3 uViewPos;       // camera position
+uniform sampler2D uTexture;
+
+uniform vec2 uTileData;
+
 in vec3 vNormal;
+in vec3 vWorldPos;
 in vec2 vTexCoord;
 
 out vec4 FragColor;
 
-// ---------------- material ----------------
-uniform vec3 uMaterialSpecular;
-uniform float uMaterialShininess;
+const int MAX_LIGHTS = 64;
 
-uniform sampler2D uDiffuseMap;  // always bound
-
-// ---------------- camera ----------------
-uniform vec3 uCameraPos;
-
-// ---------------- directional light ----------------
-struct DirectionalLight {
-    vec3 direction;
-    vec3 ambient;
-    vec3 diffuse;
-    vec3 specular;
-};
-uniform DirectionalLight uDirLight;
-
-// ---------------- point lights ----------------
+// ------ Point Light ------
 struct PointLight {
     vec3 position;
+
     vec3 ambient;
     vec3 diffuse;
     vec3 specular;
+
+    vec3 color;
+
     float constant;
     float linear;
     float quadratic;
+
+    float intensity;
+    float range;
 };
 
-#define MAX_POINT_LIGHTS 16   // set your maximum
+uniform PointLight uPointLights[MAX_LIGHTS];
 uniform int uNumPointLights;
-uniform PointLight uPointLights[MAX_POINT_LIGHTS];
 
-// ---------------- functions ----------------
-vec3 CalcDirectionalLight(DirectionalLight light, vec3 normal, vec3 viewDir, vec3 albedo) {
-    vec3 lightDir = normalize(-light.direction);
-    float diff = max(dot(normal, lightDir), 0.0);
+// ------ Spot Light ------
+struct SpotLight {
+    vec3 position;      // world-space
+    vec3 direction;     // normalized
 
-    vec3 halfDir = normalize(lightDir + viewDir);
-    float spec = pow(max(dot(normal, halfDir), 0.0), uMaterialShininess);
+    // DON'T FORGET TO COS THIS, IDIOT!
+    float cutOff;
+    float outerCutOff;
 
-    vec3 ambient  = light.ambient  * albedo;
-    vec3 diffuse  = light.diffuse  * diff * albedo;
-    vec3 specular = light.specular * spec * uMaterialSpecular;
-    return ambient + diffuse + specular;
-}
+    vec3 ambient;
+    vec3 diffuse;
+    vec3 specular;
+    vec3 color;
 
-vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir, vec3 albedo) {
+    float constant;
+    float linear;
+    float quadratic;
+
+    float intensity;
+    float range;
+};
+
+uniform int uNumSpotLights;
+uniform SpotLight uSpotLights[MAX_LIGHTS];
+
+uniform bool past_stable_max = false;
+
+vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir, vec3 albedo)
+{
     vec3 lightDir = normalize(light.position - fragPos);
+
+    // ----- Diffuse -----
     float diff = max(dot(normal, lightDir), 0.0);
 
-    vec3 halfDir = normalize(lightDir + viewDir);
-    float spec = pow(max(dot(normal, halfDir), 0.0), uMaterialShininess);
+    vec3 halfwayDir = normalize(lightDir + viewDir);
+    float spec = pow(max(dot(normal, halfwayDir), 0.0), 32.0);
 
-    float distance    = length(light.position - fragPos);
-    float attenuation = 1.0 / (light.constant + light.linear * distance + light.quadratic * (distance * distance));
+    float theta = dot(lightDir, normalize(light.direction));
+    float epsilon = light.cutOff - light.outerCutOff;
+    float spotFactor = clamp((theta + light.outerCutOff) / epsilon, 0.0, 1.0); // Apparently flipping a + to a - absolutely FUCKS rotated lighting. Don't ask me why.
 
+    float d = length(light.position - fragPos);
+    float attenuation = 1.0 - clamp(d / light.range, 0.0, 1.0);
+    attenuation *= attenuation;  
+    
     vec3 ambient  = light.ambient  * albedo;
-    vec3 diffuse  = light.diffuse  * diff * albedo;
-    vec3 specular = light.specular * spec * uMaterialSpecular;
+    vec3 diffuse  = light.diffuse  * diff * albedo * light.intensity * light.color;
+    vec3 specular = light.specular * spec * light.intensity * light.color;
 
-    return (ambient + diffuse + specular) * attenuation;
+    return (ambient + (diffuse + specular) * spotFactor) * attenuation;
 }
 
-void main() {
-    // albedo from diffuse texture
-    vec3 albedo = texture(uDiffuseMap, vTexCoord).rgb;
-
-    vec3 normal  = normalize(vNormal);
-    vec3 viewDir = normalize(uCameraPos - vWorldPos);
-
+void main()
+{
+    vec3 normal = normalize(vNormal);
     vec3 result = vec3(0.0);
 
-    // directional
-    result += CalcDirectionalLight(uDirLight, normal, viewDir, albedo);
+    vec3 albedo = texture(uTexture, vTexCoord*uTileData).rgb;
+    vec3 viewDir = normalize(uViewPos - vWorldPos);
 
-    // point lights
-    for(int i = 0; i < uNumPointLights; i++) {
-        result += CalcPointLight(uPointLights[i], normal, vWorldPos, viewDir, albedo);
+    int cur_processed_lights = 0;
+    for (int i = 0; i < uNumPointLights; i++)
+    {
+        if (cur_processed_lights > MAX_LIGHTS){
+            break;
+        }
+
+        PointLight light = uPointLights[i];
+        vec3 lightDir = normalize(light.position - vWorldPos);
+
+        vec3 ambient = light.ambient * albedo;
+
+        float diff = max(dot(normal, lightDir), 0.0);
+        vec3 diffuse = diff * light.diffuse * albedo * light.intensity * light.color;
+
+        vec3 halfwayDir = normalize(lightDir + viewDir);
+        float spec = pow(max(dot(normal, halfwayDir), 0.0), 32.0);
+        vec3 specular = spec * light.specular * light.intensity * light.color;
+
+        float distance = length(light.position - vWorldPos);
+        float attenuation = 1.0 / (light.constant +
+                           light.linear * distance +
+                           light.quadratic * distance * distance);
+
+        attenuation *= clamp(1.0 - (distance / light.range), 0.0, 1.0);
+
+        result += (ambient + diffuse + specular) * attenuation;
+
+        cur_processed_lights ++;
     }
 
-    // gamma correction
-    const float gamma = 2.2;
-    vec3 color = pow(result, vec3(1.0 / gamma));
+    for (int i = 0; i < uNumSpotLights; i++)
+    {
+        if (cur_processed_lights > MAX_LIGHTS){
+            break;
+        }
 
-    FragColor = vec4(color, 1.0);
+        result += CalcSpotLight(uSpotLights[i], normal, vWorldPos, viewDir, albedo);
+        cur_processed_lights ++;
+    }
+
+    FragColor = vec4(result, 1.0);
 }

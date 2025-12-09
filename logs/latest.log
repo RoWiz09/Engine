@@ -1,2 +1,0 @@
-[CORE] - DEBUG : GLFW initalized successfully!
-[CORE] - DEBUG : Material created with shader: <RoDevEngine.rendering.shader_program.ShaderProgram object at 0x0000022B738A9550>, properties: {'uMaterialSpecular': {'value': [0, 0, 0], 'type': 'vec3'}, 'uMaterialShininess': {'value': 0, 'type': 'float'}}

@@ -9,14 +9,19 @@ uniform mat4 uView;
 uniform mat4 uProjection;
 uniform mat3 uNormalMatrix;
 
-out vec3 vWorldPos;
 out vec3 vNormal;
+out vec3 vWorldPos;
 out vec2 vTexCoord;
 
-void main() {
-    vec4 worldPos = uModel * vec4(aPos, 1.0);
-    vWorldPos = worldPos.xyz;
-    vNormal   = normalize(uNormalMatrix * aNormal);
+void main()
+{
+    // World-space vertex position
+    vWorldPos = vec3(uModel * vec4(aPos, 1.0));
+
+    // World-space normal
+    vNormal = normalize(uNormalMatrix * aNormal);
+
+    gl_Position = uProjection * uView * vec4(vWorldPos, 1.0);
     vTexCoord = aTexCoord;
-    gl_Position = uProjection * uView * worldPos;
 }
+

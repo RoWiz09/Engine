@@ -1,6 +1,7 @@
-from RoDevEngine.scripts.behavior import Behavior
-from RoDevEngine.core.logger import Logger
+from .behavior import Behavior
+from ..core.logger import Logger
 from OpenGL import GL
+import pyglm.glm as glm
 import numpy as np
 import hashlib
 
@@ -86,6 +87,9 @@ class Mesh(Behavior):
 
         model = self.gameobject.transform.get_model_matrix()
         self.gameobject.mat.shader.set_mat4("uModel", model)
+
+        normalMatrix = glm.mat3(glm.transpose(glm.inverse(model)))
+        self.gameobject.mat.shader.set_mat3("uNormalMatrix", normalMatrix)
 
         GL.glBindVertexArray(self._vao)
         count = Mesh._mesh_registry[self._mesh_id]["count"]

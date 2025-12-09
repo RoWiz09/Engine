@@ -3,7 +3,7 @@ from typing_extensions import overload
 
 from RoDevEngine.core.logger import Logger
 from RoDevEngine.core.scene_manager import SceneManager
-from RoDevEngine.object import Object
+from RoDevEngine.core.input import Input
 
 import glfw
 import sys, os, OpenGL.GL as gl
@@ -44,7 +44,10 @@ class Window:
         gl.glEnable(gl.GL_CULL_FACE)
         gl.glEnable(gl.GL_DEPTH_TEST)
 
+        self.input_handler = Input()
+
         compiled = not os.path.isfile(".rproj") # If there is a .rproj file, then the project has not been built yet.
+        os.environ['compiled'] = str(compiled)
         self.scene_manager = SceneManager(compiled)
 
     def should_close(self):
@@ -52,6 +55,8 @@ class Window:
 
     def update(self):
         glfw.poll_events()
+
+        self.input_handler.get_inputs(self.window)
 
         gl.glViewport(0, 0, *glfw.get_window_size(self.window))
 
@@ -62,8 +67,4 @@ class Window:
         glfw.swap_buffers(self.window)
 
     def terminate(self):
-        """
-            Usually automatically called. You shouldn't call it yourself, unless you are sure that you have to.
-        """
-
         glfw.terminate()

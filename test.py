@@ -1,27 +1,42 @@
-def create_dynamic_class(class_name, methods_code):
+def create_dynamic_class(class_name):
     local_namespace = {}
     class_definition = f"""
-class {class_name}:
-    def __init__(self, value):
-        self.value = value
-        from RoDevEngine.core.logger import Logger, configure_loggers, LoggingLevels
-        configure_loggers(log_level=LoggingLevels.DEBUG, log_to_console=True)
+from RoDevEngine.scripts.behavior import Behavior
+from RoDevEngine.core.input import KeyCodes, Input
+from RoDevEngine import get_logger
 
-        Logger("DYNAMIC").log_info(f"Instance of {class_name} created with value: {{value}}")
-    {methods_code}
+from pyglm import glm
+
+class Test(Behavior):
+    def __init__(self, gameobject):
+        super().__init__(gameobject)
+
+    def on_scene_load(self, scene_info):
+        get_logger("MY LOGGER").log_info(f"Cool, we loaded")
+
+    def update(self, dt):
+        y_move = 0
+        if Input().get_key(KeyCodes.k_W):
+            y_move += 100
+        elif Input().get_key(KeyCodes.k_S):
+            y_move -= 100
+        
+        x_move = 0
+        if Input().get_key(KeyCodes.k_A):
+            x_move -= 100
+        elif Input().get_key(KeyCodes.k_D):
+            x_move += 100
+
+        self.gameobject.transform.rotate_by_degrees(degrees=glm.vec3(x_move*dt, y_move*dt, 0))
+        return super().update(dt)
+
 """
     exec(class_definition, globals(), local_namespace)
     return local_namespace[class_name]
 
-# Define some methods for the class
-methods = """
-    def greet(self):
-        return f"Hello from {self.value}!"
-"""
-
 # Create the class dynamically
-MyDynamicClass = create_dynamic_class("MyDynamicClass", methods)
+MyDynamicClass = create_dynamic_class("Test")
 
 # Use the dynamically created class
-instance = MyDynamicClass("Python")
-print(instance.greet())
+instance = MyDynamicClass(0)
+print(instance.gameobject)

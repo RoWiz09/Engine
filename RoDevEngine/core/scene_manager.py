@@ -2,12 +2,13 @@ from RoDevEngine.rendering.shader_program import ShaderProgram
 from RoDevEngine.rendering.material import Material
 from RoDevEngine.scripts.behavior import Behavior
 from RoDevEngine.core.transform import Transform
+from RoDevEngine.scripts.light import Pointlight, Spotlight
 from RoDevEngine.core.packer import Pack
 from RoDevEngine.object import Object 
 
 from pyglm import glm
 
-import PIL.Image as image
+from PIL import Image as image
 
 from RoDevEngine.core.logger import Logger
 
@@ -27,8 +28,8 @@ class SceneManager:
             self.pack = Pack()
 
         self.scenes = self.get_scenes()
-        shaders = self.get_shaders()
-        self.materials = self.get_materials(shaders)
+        self.shaders = self.get_shaders()
+        self.materials = self.get_materials(self.shaders)
         self.game_objects: list[Object] = []
 
         self.scripts = {}
@@ -38,6 +39,8 @@ class SceneManager:
 
         # Load first scene by default
         self.load_scene_index(0)
+
+        self.active_camera = None
 
     def get_scenes(self) -> dict[str, str]:
         """Returns dict of scene_name -> file_path"""
@@ -59,7 +62,7 @@ class SceneManager:
 
     def get_shaders(self) -> dict[str, ShaderProgram]:
         """
-            Returns dict of shader_name -> file_path
+            Returns dict of shader_name -> ShaderProgram
         """
         shaders = {}
         if not self.compiled:
@@ -106,7 +109,7 @@ class SceneManager:
     
     def get_materials(self, shaders:dict[str, ShaderProgram]) -> dict[str, Material]:
         """
-            Returns dict of material_name -> material_data
+            Returns dict of material_name -> Material
         """
         materials = {}
         if not self.compiled:
@@ -122,17 +125,19 @@ class SceneManager:
                             properties = material_data.get("properties", {})
                             
                             shader_name = os.path.basename(shader_path).removesuffix(".rshader")
-                            shader = shaders.get(shader_name, None)
-
-                            if shader:
-                                img = None
-                                if texture_path:
-                                    img = image.open(texture_path)
-
-                                materials[name] = Material(shader, img.tobytes() if img else None, img.size if img else None, properties)
+                            if shader_name in shaders.keys():
+                                shader = shaders[shader_name]
                             else:
                                 Logger("SCENE MANAGEMENT").log_warning(f"Material {name} references unknown shader {shader_name}.")
+                                continue
 
+                            img = None
+                            if texture_path:
+                                img = image.open(texture_path)
+                                img = img.transpose(image.FLIP_TOP_BOTTOM)
+
+                            materials[name] = Material(shader, img.tobytes() if img else None, img.size if img else None, properties)
+                                
         else:
             for file in self.pack.files:
                 if file.endswith(".rmat"):
@@ -153,9 +158,8 @@ class SceneManager:
                         
                         materials[name] = Material(shader, img.tobytes() if img else None, img.size if img else None, properties)
                     else:
-                        Logger("CORE").log_warning(f"Material {name} references unknown shader: {shader_name}.")
-
-                        
+                        Logger("CORE").log_warning(f"Material {name} references unknown shader: {shader_name}.")             
+        
         return materials        
 
     def _instantiate_scene_objects(self, scene_data: dict) -> list[Object]:
@@ -163,9 +167,10 @@ class SceneManager:
             
         game_objects: list[dict] = scene_data["objects"]
 
-        for obj_data in game_objects:
+        def instantiate_object(obj_data: dict, parent: Object = None):
             object_name = obj_data["name"]
-            object_transform = Transform(glm.vec3(*obj_data["pos"]), glm.quat(*obj_data["rot"]), glm.vec3(*obj_data["scale"]))
+            parent_t = None if parent is None else parent.transform
+            object_transform = Transform(glm.vec3(*obj_data["pos"]), glm.vec3(*obj_data["rot"]), glm.vec3(*obj_data["scale"]), parent_t)
             game_object = Object(object_name, self.materials.get(obj_data["material"], self.materials["base_mat"]), object_transform)
             scripts = []
 
@@ -178,14 +183,21 @@ class SceneManager:
                     behavior = cls(game_object)
                     for var_name, value in vars_data.items():
                         setattr(behavior, var_name, value)
+                    behavior.enabled = comp_data.get("active", True)
                     scripts.append(behavior)
                 else:
                     Logger("CORE").log_warning(
                         f"Script {cls.__name__} is not a subclass of Behavior and cannot be applied to {object_name}!"
-                    )
+                    )            
+
+            for child in obj_data.get("children", []):
+                instantiate_object(child, game_object)
 
             game_object.add_components(*scripts)
             scene_objects.append(game_object)
+
+        for object in game_objects:
+            instantiate_object(object)
 
         return scene_objects
 
@@ -218,14 +230,43 @@ class SceneManager:
             for script in obj.components:
                 script.on_scene_load(scene_info)
 
+    def get_objects_with_component(self, component_class) -> list[Object]:
+        objects = []
+        for object in self.game_objects:
+            if object.get_component(component_class):
+                objects.append(object)
+        
+        return objects
+
     def update_scene(self):
         time = glfw.get_time()
         dt = time - self.last_time
         self.last_time = time
         self.accumulator += dt
 
-        view = glm.lookAt(glm.vec3(0, 0, -5), glm.vec3(0, 0, -5)+glm.vec3(0, 0, 5), glm.vec3(0, 1, 0))
-        proj = glm.perspective(glm.radians(45), 800/600, 0.01, 1000)
+        if self.active_camera:
+            view = glm.lookAt(glm.vec3(0, 0, -5), glm.vec3(0, 0, -5)+glm.vec3(0, 0, 5), glm.vec3(0, 1, 0))
+            width, height = glfw.get_window_size(glfw.get_current_context())
+            proj = glm.perspective(glm.radians(60), width/height, 0.01, 1000)
+
+        else:
+            view = glm.lookAt(glm.vec3(0, 0, 0), glm.vec3(0, 0, 5), glm.vec3(0, 1, 0))
+            width, height = glfw.get_window_size(glfw.get_current_context())
+            proj = glm.perspective(glm.radians(60), width/height, 0.01, 1000)
+
+        pointlights = []
+        spotlights = []
+        for light_object in self.get_objects_with_component(Pointlight):
+            light: Pointlight = light_object.get_component(Pointlight)
+            pointlights.append(light)
+
+        for light_object in self.get_objects_with_component(Spotlight):
+            light: Spotlight = light_object.get_component(Spotlight)
+            spotlights.append(light)
+        
+        for shader in self.shaders.values():
+            shader.set_point_lights("uPointLights", pointlights)
+            shader.set_spot_lights("uSpotLights", spotlights)
 
         for obj in self.game_objects:
             obj.update(dt, view, proj)

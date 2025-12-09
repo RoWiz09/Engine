@@ -17,7 +17,7 @@ class Behavior:
     @enabled.setter
     def enabled(self, value: bool):
         if isinstance(value, bool):
-            self._enabled = value
+            self.__enabled = value
         else:
             Logger("CORE").log_error("Behavior.enabled must be set to a boolean value.")
 

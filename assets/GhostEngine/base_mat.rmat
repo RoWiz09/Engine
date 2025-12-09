@@ -2,7 +2,7 @@
     "texture_path": null,
     "shader_path": "assets/GhostEngine/base_shader.rshader",
     "properties": {
-        "uMaterialSpecular": {"value":[0, 0, 0], "type":"vec3"},
-        "uMaterialShininess": {"value":0, "type":"float"}
+        "uMaterialSpecular": {"value":[1, 1, 1], "type":"vec3"},
+        "uMaterialShininess": {"value":0.1, "type":"float"}
     } 
 }
