@@ -1,10 +1,11 @@
 from typing_extensions import overload
 
-from RoDevEngine.core.logger import Logger
-from RoDevEngine.rendering.material import Material
-from RoDevEngine.core.transform import Transform
+from .core.logger import Logger
+from .rendering.material import Material
+from .core.transform import Transform
 
-import RoDevEngine.scripts.behavior as behavior
+from .scripts.behavior import Behavior
+import sys
 
 class Object:
     @overload
@@ -19,13 +20,15 @@ class Object:
     def __init__(self, name, material:Material, transform: Transform = Transform(), *components):
         self.name = name
         self.mat = material
-        self.components : list[behavior.Behavior] = []
+        self.components : list[Behavior] = []
+
+        transform.gameobject = self
 
         self.__transform = transform
         self.__enabled = True
 
         for comp in components:
-            if issubclass(type(comp), behavior.Behavior):
+            if issubclass(type(comp), Behavior):
                 self.components.append(comp)
             
             else:
@@ -36,15 +39,22 @@ class Object:
         return self.__transform
 
     def update(self, dt, view, proj):
-        self.mat.use()
-        self.mat.shader.set_mat4("uView", view)
-        self.mat.shader.set_mat4("uProjection", proj)
-        for component in self.components:
-            if component.enabled:
+        if self.enabled:
+            self.mat.use()
+            self.mat.shader.set_mat4("uView", view)
+            self.mat.shader.set_mat4("uProjection", proj)
+            for component in self.components:
+                if not component.enabled:
+                    continue
+
+                if sys.argv[-1] == "--editor" and not component._run_in_editor:
+                    continue
+
                 component.update(dt)
     
     def set_material(self, mat:Material):
         self.mat = mat
+        return self
 
     def fixed_update(self):
         for component in self.components:
@@ -58,14 +68,14 @@ class Object:
 
     def add_components(self, *components):
         for component in components:
-            if issubclass(type(component), behavior.Behavior):
+            if issubclass(type(component), Behavior):
                 component._gameobject = self
                 self.components.append(component)
             else:
                 Logger("CORE").log_error(f"Object of type {type(component).__name__} is not a Behavior.")
 
     def add_component(self, component):
-        if issubclass(type(component), behavior):
+        if issubclass(type(component), Behavior):
             component._gameobject = self
             self.components.append(component)
 
@@ -84,7 +94,7 @@ class Object:
         if isinstance(state, bool):
             self.__enabled = state
 
-            return self.__enabled
+            return self
         else:
             Logger("CORE").log_warning(f"{type(state).__name__} is not of type bool")
-            return None
+            return self

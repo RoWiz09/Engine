@@ -1,6 +1,16 @@
 from enum import Enum
 import glfw
 
+class MouseButtons(Enum):
+    LEFT = glfw.MOUSE_BUTTON_LEFT
+    MIDDLE = glfw.MOUSE_BUTTON_MIDDLE
+    RIGHT = glfw.MOUSE_BUTTON_RIGHT
+
+class CursorStates(Enum):
+    NORMAL = glfw.CURSOR_NORMAL
+    HIDDEN = glfw.CURSOR_HIDDEN
+    DISABLED = glfw.CURSOR_DISABLED
+
 class KeyCodes(Enum):
     k_A = glfw.KEY_A
     k_B = glfw.KEY_B
@@ -95,6 +105,10 @@ class Input:
             return  # Prevent reinitialization across scenes or scripts
         self.__keys_pressed_now = set()
         self.__keys_pressed_last = set()
+
+        self.__mouse_pos = (0, 0)
+        self.__mouse_buttons_pressed_now = set()
+        self.__mouse_buttons_pressed_last = set()
         Input._initialized = True
 
     def get_inputs(self, window):
@@ -106,6 +120,15 @@ class Input:
         for key in KeyCodes:
             if glfw.get_key(window, key.value) == glfw.PRESS:
                 self.__keys_pressed_now.add(key.value)
+
+        self.__mouse_pos = glfw.get_cursor_pos(window)
+
+        self.__mouse_buttons_pressed_last = self.__mouse_buttons_pressed_now.copy()
+        self.__mouse_buttons_pressed_now.clear()
+
+        for button in MouseButtons:
+            if glfw.get_mouse_button(window, button.value):
+                self.__mouse_buttons_pressed_now.add(button.value)
 
     def get_key_down(self, keycode: KeyCodes) -> bool:
         """True only on the frame the key was pressed."""
@@ -124,3 +147,47 @@ class Input:
             keycode.value in self.__keys_pressed_last
             and keycode.value not in self.__keys_pressed_now
         )
+    
+    # Mouse
+    def get_mouse_button_down(self, mouse_button: MouseButtons) -> bool:
+        """True only on the frame the button was pressed."""
+        return (
+            mouse_button.value in self.__mouse_buttons_pressed_now
+            and mouse_button.value not in self.__mouse_buttons_pressed_last
+        )
+
+    def get_mouse_button(self, mouse_button: MouseButtons) -> bool:
+        """True while the button is being held."""
+        return mouse_button.value in self.__mouse_buttons_pressed_now
+
+    def get_mouse_button_up(self, mouse_button: MouseButtons) -> bool:
+        """True only on the frame the button was released."""
+        return (
+            mouse_button.value in self.__mouse_buttons_pressed_last
+            and mouse_button.value not in self.__mouse_buttons_pressed_now
+        )
+    
+    def get_cursor_pos(self):
+        return self.__mouse_pos
+    
+    def set_cursor_pos(self, mx: int, my: int):
+        glfw.set_cursor_pos(glfw.get_current_context(), mx, my)
+
+    def set_cursor_visibility(self, cursor_state: CursorStates):
+        """
+        Sets the cursor's visibility
+        
+        :param cursor_state: The state of the cursor. Hidden hides the cursor, but doesn't recenter it.
+        :type cursor_state: CursorStates
+        """
+        glfw.set_input_mode(glfw.get_current_context(), glfw.CURSOR, cursor_state.value)
+    
+    @property
+    def mouse_pos(self):
+        return self.__mouse_pos
+    
+    @mouse_pos.setter
+    def mouse_pos(self, value: tuple[int, int]):
+        mx, my = value
+        glfw.set_cursor_pos(glfw.get_current_context(), mx, my)
+    

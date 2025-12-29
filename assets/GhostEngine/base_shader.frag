@@ -1,8 +1,9 @@
 #version 330 core
 
-uniform vec3 uViewPos;       // camera position
-uniform sampler2D uTexture;
+#define MAX_LIGHTS 64
 
+uniform vec3 uViewPos;
+uniform sampler2D uTexture;
 uniform vec2 uTileData;
 
 in vec3 vNormal;
@@ -11,16 +12,13 @@ in vec2 vTexCoord;
 
 out vec4 FragColor;
 
-const int MAX_LIGHTS = 64;
-
-// ------ Point Light ------
+// -------------------- Point Light --------------------
 struct PointLight {
     vec3 position;
 
     vec3 ambient;
     vec3 diffuse;
     vec3 specular;
-
     vec3 color;
 
     float constant;
@@ -34,14 +32,13 @@ struct PointLight {
 uniform PointLight uPointLights[MAX_LIGHTS];
 uniform int uNumPointLights;
 
-// ------ Spot Light ------
+// -------------------- Spot Light --------------------
 struct SpotLight {
     vec3 position;      // world-space
-    vec3 direction;     // normalized
+    vec3 direction;     // normalized (points outward)
 
-    // DON'T FORGET TO COS THIS, IDIOT!
-    float cutOff;
-    float outerCutOff;
+    float cutOff;       // cos(inner angle)
+    float outerCutOff;  // cos(outer angle)
 
     vec3 ambient;
     vec3 diffuse;
@@ -56,83 +53,109 @@ struct SpotLight {
     float range;
 };
 
-uniform int uNumSpotLights;
 uniform SpotLight uSpotLights[MAX_LIGHTS];
+uniform int uNumSpotLights;
 
-uniform bool past_stable_max = false;
+// ----------------------------------------------------
 
-vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir, vec3 albedo)
-{
+vec3 CalcSpotLight(
+    SpotLight light,
+    vec3 normal,
+    vec3 fragPos,
+    vec3 viewDir,
+    vec3 albedo
+) {
+    // Direction from fragment → light
     vec3 lightDir = normalize(light.position - fragPos);
+
+    // Distance check (hard range cutoff)
+    float distance = length(light.position - fragPos);
+    if (distance > light.range)
+        return vec3(0.0);
+
+    // ----- Spotlight cone -----
+    float theta = dot(-lightDir, normalize(light.direction));
+    float epsilon = max(light.cutOff - light.outerCutOff, 0.0001);
+    float spotFactor = clamp((theta - light.outerCutOff) / epsilon, 0.0, 1.0);
+
+    if (spotFactor <= 0.0)
+        return vec3(0.0);
 
     // ----- Diffuse -----
     float diff = max(dot(normal, lightDir), 0.0);
 
+    // ----- Specular (Blinn-Phong) -----
     vec3 halfwayDir = normalize(lightDir + viewDir);
     float spec = pow(max(dot(normal, halfwayDir), 0.0), 32.0);
 
-    float theta = dot(lightDir, normalize(light.direction));
-    float epsilon = light.cutOff - light.outerCutOff;
-    float spotFactor = clamp((theta + light.outerCutOff) / epsilon, 0.0, 1.0); // Apparently flipping a + to a - absolutely FUCKS rotated lighting. Don't ask me why.
+    // ----- Attenuation (physical) -----
+    float attenuation = 1.0 / (
+        light.constant +
+        light.linear * distance +
+        light.quadratic * distance * distance
+    );
 
-    float d = length(light.position - fragPos);
-    float attenuation = 1.0 - clamp(d / light.range, 0.0, 1.0);
-    attenuation *= attenuation;  
-    
-    vec3 ambient  = light.ambient  * albedo;
-    vec3 diffuse  = light.diffuse  * diff * albedo * light.intensity * light.color;
-    vec3 specular = light.specular * spec * light.intensity * light.color;
+    // ----- Lighting terms -----
+    vec3 ambient  = light.ambient * albedo;
+    vec3 diffuse  = light.diffuse * diff * albedo * light.color;
+    vec3 specular = light.specular * spec * light.color;
 
-    return (ambient + (diffuse + specular) * spotFactor) * attenuation;
+    vec3 color = ambient + (diffuse + specular) * light.intensity;
+
+    return color * attenuation * spotFactor;
 }
 
 void main()
 {
     vec3 normal = normalize(vNormal);
+    vec3 viewDir = normalize(uViewPos - vWorldPos);
+    vec3 albedo = texture(uTexture, vTexCoord * uTileData).rgb;
+
     vec3 result = vec3(0.0);
 
-    vec3 albedo = texture(uTexture, vTexCoord*uTileData).rgb;
-    vec3 viewDir = normalize(uViewPos - vWorldPos);
-
-    int cur_processed_lights = 0;
-    for (int i = 0; i < uNumPointLights; i++)
+    // -------- Point Lights --------
+    int pointCount = min(uNumPointLights, MAX_LIGHTS);
+    for (int i = 0; i < pointCount; ++i)
     {
-        if (cur_processed_lights > MAX_LIGHTS){
-            break;
-        }
-
         PointLight light = uPointLights[i];
-        vec3 lightDir = normalize(light.position - vWorldPos);
 
-        vec3 ambient = light.ambient * albedo;
+        vec3 lightDir = normalize(light.position - vWorldPos);
+        float distance = length(light.position - vWorldPos);
+        if (distance > light.range)
+            continue;
 
         float diff = max(dot(normal, lightDir), 0.0);
-        vec3 diffuse = diff * light.diffuse * albedo * light.intensity * light.color;
 
         vec3 halfwayDir = normalize(lightDir + viewDir);
         float spec = pow(max(dot(normal, halfwayDir), 0.0), 32.0);
-        vec3 specular = spec * light.specular * light.intensity * light.color;
 
-        float distance = length(light.position - vWorldPos);
-        float attenuation = 1.0 / (light.constant +
-                           light.linear * distance +
-                           light.quadratic * distance * distance);
+        float attenuation = 1.0 / (
+            light.constant +
+            light.linear * distance +
+            light.quadratic * distance * distance
+        );
 
-        attenuation *= clamp(1.0 - (distance / light.range), 0.0, 1.0);
+        float rangeFade = 1.0 - clamp(distance / light.range, 0.0, 1.0);
+        attenuation *= rangeFade * rangeFade;
 
-        result += (ambient + diffuse + specular) * attenuation;
+        vec3 ambient  = light.ambient * albedo;
+        vec3 diffuse  = diff * light.diffuse * albedo * light.color;
+        vec3 specular = spec * light.specular * light.color;
 
-        cur_processed_lights ++;
+        result += (ambient + (diffuse + specular) * light.intensity) * attenuation;
     }
 
-    for (int i = 0; i < uNumSpotLights; i++)
+    // -------- Spot Lights --------
+    int spotCount = min(uNumSpotLights, MAX_LIGHTS - pointCount);
+    for (int i = 0; i < spotCount; ++i)
     {
-        if (cur_processed_lights > MAX_LIGHTS){
-            break;
-        }
-
-        result += CalcSpotLight(uSpotLights[i], normal, vWorldPos, viewDir, albedo);
-        cur_processed_lights ++;
+        result += CalcSpotLight(
+            uSpotLights[i],
+            normal,
+            vWorldPos,
+            viewDir,
+            albedo
+        );
     }
 
     FragColor = vec4(result, 1.0);

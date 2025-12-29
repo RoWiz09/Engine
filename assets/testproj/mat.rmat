@@ -1,5 +1,5 @@
 {
-    "texture_path": "assets/testproj/container.png",
+    "texture_path": "assets/testproj/mmm.png",
     "shader_path": "assets/GhostEngine/base_shader.rshader",
     "properties": {
         "uMaterialSpecular": {"value":[1, 1, 1], "type":"vec3"},

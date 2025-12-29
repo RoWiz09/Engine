@@ -1,9 +1,16 @@
 from .behavior import Behavior
 from ..core.logger import Logger
+
+from ..core.packer import Pack
+
+from ..object import Object
+from ..rendering.material import Material
 from OpenGL import GL
 import pyglm.glm as glm
 import numpy as np
 import hashlib
+
+import os
 
 class Mesh(Behavior):
     # Class-level registry for shared mesh data
@@ -11,13 +18,132 @@ class Mesh(Behavior):
 
     def __init__(self, gameobject):
         super().__init__(gameobject)
-        # These must be set later with setattr()
+        self._run_in_editor = True
+
+        self.mesh_path = None
+        self.mesh_name = None
+
+        self.last_mesh_path = None
+        self.last_mesh_name = None
+
+        self.submeshes: list[Submesh] = []
+
+    @classmethod
+    def load_obj(cls, file_path: str, file_name: str, game_object: Object):
+        submeshes = []
+        cur_mesh = None
+
+        positions = []
+        normals = []
+        tex_coords = []
+
+        vertices = []   # interleaved vertex data
+        indices = []
+
+        vertex_map = {}  # (v, vt, vn) -> index
+
+        lines = []
+        if not "compiled" in os.environ.keys():
+            with open(os.path.join(*file_path.split("."), file_name)) as file:
+                lines = file.readlines()
+        else:
+            pack = Pack()
+            lines = pack.get_string(os.path.join(*file_path.split("."), file_name)).splitlines()
+
+        for line in lines:
+            if line.startswith("o "):
+                if cur_mesh:
+                    cur_mesh.indices = indices
+                    cur_mesh.vertices = vertices
+
+                    cur_mesh._create_or_get_buffers()
+
+                    submeshes.append(cur_mesh)
+                
+                positions.clear()
+                normals.clear()
+                tex_coords.clear()
+
+                vertices.clear()
+                indices.clear()
+
+                cur_mesh = Submesh(game_object)
+
+            elif line.startswith("v "):
+                positions.append(tuple(map(float, line.split()[1:4])))
+
+            elif line.startswith("vn "):
+                normals.append(tuple(map(float, line.split()[1:4])))
+
+            elif line.startswith("vt "):
+                tex_coords.append(tuple(map(float, line.split()[1:3])))
+
+            elif line.startswith("f "):
+                face = line.split()[1:]
+
+                # triangulate face (fan method)
+                for i in range(1, len(face) - 1):
+                    for vert in (face[0], face[i], face[i + 1]):
+
+                        parts = vert.split("/")
+                        v = int(parts[0]) - 1
+                        vt = int(parts[1]) - 1 if len(parts) > 1 and parts[1] else None
+                        vn = int(parts[2]) - 1 if len(parts) > 2 and parts[2] else None
+
+                        key = (v, vt, vn)
+                        if key not in vertex_map:
+                            px, py, pz = positions[v]
+
+                            if vt is not None:
+                                u, v_ = tex_coords[vt]
+                            else:
+                                u, v_ = 0.0, 0.0
+
+                            if vn is not None:
+                                nx, ny, nz = normals[vn]
+                            else:
+                                nx, ny, nz = 0.0, 0.0, 0.0
+
+                            vertex_map[key] = len(vertices) // 8
+                            vertices.extend([
+                                px, py, pz,
+                                u, v_,
+                                nx, ny, nz
+                            ])
+
+                        indices.append(vertex_map[key])
+
+        cur_mesh.indices = indices
+        cur_mesh.vertices = vertices
+
+        cur_mesh._create_or_get_buffers()
+
+        submeshes.append(cur_mesh)
+
+        mesh = cls(game_object)
+        mesh.submeshes = submeshes
+
+        return mesh
+    
+    def update(self, dt):
+        if not self.enabled:
+            return
+        
+        for mesh in self.submeshes:
+            mesh.update()
+
+class Submesh:
+    def __init__(self, gameobject):
+        self.gameobject = gameobject
+        
         self.vertices = None
         self.indices = None
-        self._mesh_id = None
-        self._vao = None
-        self._vbo = None
-        self._ebo = None
+        self.mesh_id = None
+        self.vao = None
+        self.vbo = None
+        self.ebo = None
+
+        self.render_mat: Material = None
 
     def _create_or_get_buffers(self):
         """Creates or retrieves shared VAO/VBO/EBO for this mesh data."""
@@ -75,15 +201,14 @@ class Mesh(Behavior):
         self._vbo = shared["vbo"]
         self._ebo = shared["ebo"]
 
-    def on_scene_load(self, scene_info):
-        self._create_or_get_buffers()
-
-    def update(self, dt:float):
-        if not self.enabled:
-            return
+    def update(self):
+        print("test")
         if self._vao is None:
-            Logger("CORE").log_warning("Mesh.update called before buffers created. Creating now.")
+            Logger("CORE").log_warning("SubMesh.update called before buffers created. Creating now.")
             self._create_or_get_buffers()
+
+        if self.render_mat:
+            self.render_mat.use()
 
         model = self.gameobject.transform.get_model_matrix()
         self.gameobject.mat.shader.set_mat4("uModel", model)
@@ -95,3 +220,4 @@ class Mesh(Behavior):
         count = Mesh._mesh_registry[self._mesh_id]["count"]
         GL.glDrawElements(GL.GL_TRIANGLES, count, GL.GL_UNSIGNED_INT, None)
         GL.glBindVertexArray(0)
+

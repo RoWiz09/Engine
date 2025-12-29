@@ -1,35 +1,37 @@
-from .behavior import Behavior
+from .behavior import *
 from pyglm.glm import vec3, quat
 from enum import Enum
 
-class light(Behavior):
+class Pointlight(Behavior):
+    ambient = vec3()
+    diffuse = vec3()
+    specular = vec3()
+
+    intensity = EditorField("float", 1)
+    color = EditorField("vec3", vec3())
+
     def __init__(self, gameobject):
-        super().__init__(gameobject)
-
-        # Shared light data
-        self.ambient = vec3()
-        self.diffuse = vec3()
-        self.specular = vec3()
-
-        self.intensity = 0
-        self.color = vec3()
-
-class Pointlight(light):
-    def __init__(self, gameobject):
-        super().__init__(gameobject)
+        super().__init__(gameobject)  
 
         self.constant = 0.0
         self.linear = 0.0
         self.quadratic = 0.0
 
-class Spotlight(light):
+class Spotlight(Behavior):
+    ambient = vec3()
+    diffuse = vec3()
+    specular = vec3()
+
+    intensity = EditorField("float", 1)
+    color = EditorField("vec3", vec3())
+
+    direction = EditorField("vec3", vec3())
+    range = EditorField("float", 1)
+    cutOff = EditorField("float", 1)
+    outerCutOff = EditorField("float", 1)
+
     def __init__(self, gameobject):
         super().__init__(gameobject)
-        
-        self.direction = vec3()
-        self.range = 1.0
-        self.cutOff = 0.0
-        self.outerCutOff = 0.0
 
         self.constant = 0.0
         self.linear = 0.0

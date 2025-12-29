@@ -4,8 +4,8 @@ from typing import Optional
 import OpenGL.GL as gl
 import PIL.Image as image
 
-from RoDevEngine.core.logger import Logger
-from RoDevEngine.rendering.shader_program import ShaderProgram
+from ..core.logger import Logger
+from ..rendering.shader_program import ShaderProgram
 
 class Material:
     def __init__(self, shader: ShaderProgram, texture_data: Optional[bytes], texture_size: Optional[tuple[int, int]] = None, properties: Optional[dict] = None):

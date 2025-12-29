@@ -1,6 +1,6 @@
 from OpenGL.GL import *
-from RoDevEngine.core.logger import Logger
-from RoDevEngine.scripts.light import Pointlight, Spotlight
+from ..core.logger import Logger
+from ..scripts.light import Pointlight, Spotlight
 from pyglm import glm
 import numpy as np
 
@@ -146,7 +146,7 @@ class ShaderProgram:
         return f"ShaderProgram<{self.program_id}>"
     
     @_use_shader
-    def set_directional_light(self, name: str, light):
+    def set_directional_light(self, name: str, light: Spotlight):
         """
             Sets the active directional light in the scene.\n
             You can only have ONE directional light.
@@ -154,9 +154,6 @@ class ShaderProgram:
                 name (str): The name of the light uniform
                 light (light): The light data.
         """
-        # if isinstance(light)
-            # Logger("SHADER").log_error("A non-directional light is trying to be used as a directional light!")
-            # return
         
         self.set_vec3(f"{name}.direction", light.direction)
         self.set_vec3(f"{name}.ambient",   light.ambient)
@@ -208,12 +205,12 @@ class ShaderProgram:
     def __set_spot_light(self, base_name: str, index: int, light: Spotlight):
         prefix = f"{base_name}[{index}]"
 
-        if len(light.direction) == 3 or isinstance(light.direction, glm.vec3):
-            light.direction = glm.quat(glm.radians(glm.vec3(light.direction)))
-
         # Position + direction
         self.set_vec3(f"{prefix}.position",  light.gameobject.transform.pos)
-        self.set_vec3(f"{prefix}.direction", glm.normalize(glm.vec3(0, 0, 1) * (light.direction * light.gameobject.transform.rot)))
+        forward = glm.vec3(0, 0, 1)
+        dir = glm.normalize(light.gameobject.transform.rot * glm.quat(glm.radians(light.direction)) * forward)
+
+        self.set_vec3(f"{prefix}.direction", dir)
 
         # Colors
         self.set_vec3(f"{prefix}.ambient",   light.ambient)
@@ -221,8 +218,7 @@ class ShaderProgram:
         self.set_vec3(f"{prefix}.specular",  light.specular)
         self.set_vec3(f"{prefix}.color", light.color)
 
-        # Angles (already cosine in your engine or raw angle?)
-        # If they are raw radians, convert in your engine.
+        # Angles
         self.set_float(f"{prefix}.cutOff",       glm.cos(light.cutOff))
         self.set_float(f"{prefix}.outerCutOff",  glm.cos(light.outerCutOff))
         self.set_float(f"{prefix}.range", light.range)
@@ -249,7 +245,6 @@ class ShaderProgram:
         # Push each spotlight
         for i, light in enumerate(lights):
             try:
-                Logger("SHADER").log_debug(f"Sending spotlight {i}")
                 self.__set_spot_light(uniform_name, i, light)
             except Exception as e:
                 Logger("SHADER").log_error(f"Invalid spotlight at index {i}: {e}")

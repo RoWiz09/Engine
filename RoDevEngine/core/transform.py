@@ -7,15 +7,14 @@ class Transform:
                        scale: glm.vec3 = glm.vec3(1.0),
                        parent = None):
         self.__pos = pos
-        # Convert to radians
-        pitch_rad, yaw_rad, roll_rad = glm.radians(rot.x), glm.radians(rot.y), glm.radians(rot.z)
 
         # Create quaternion from Euler angles
-        self.__rot = glm.quat(glm.vec3(pitch_rad, yaw_rad, roll_rad))
+        self.__rot = rot
 
         self.scale = scale
 
         self.__parent = parent
+        self.gameobject = None
 
     @property
     def pos(self):
@@ -25,11 +24,31 @@ class Transform:
         return self.__pos 
     
     @property
+    def localpos(self):
+        return self.__pos
+    
+    @localpos.setter
+    def localpos(self, value):
+        self.__pos = value
+
+    @property
+    def quaternion_rot(self):
+        return glm.quat(glm.radians(self.__rot))
+    
+    @property
     def rot(self):
         if self.__parent:
-            return self.__rot * self.parent.rot
+            return self.quaternion_rot * self.parent.rot
         
+        return self.quaternion_rot
+    
+    @property
+    def localrot(self):
         return self.__rot
+
+    @localrot.setter
+    def localrot(self, value):
+        self.__rot = value
 
     @property
     def parent(self):

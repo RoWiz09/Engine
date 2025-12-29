@@ -97,3 +97,6 @@ Thumbs.db
 
 # Config Files
 *.rconfig
+ 
+# ini files
+*.ini

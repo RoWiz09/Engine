@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from RoDevEngine.core.logger import Logger
+from .logger import Logger
 
 import io
 
@@ -10,6 +10,7 @@ import json
 
 class Pack:
     _instance = None
+    _initalized = False
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
@@ -17,34 +18,34 @@ class Pack:
         return cls._instance
 
     def __init__(self):
-        self.files : list[str] = []
-        with open("pak_master.mrpk", "rb") as master_pak:
-            # Read and validate header
-            header_struct = struct.Struct("<4sHHH")
-            magic, version, entry_count, packs_offset = header_struct.unpack(master_pak.read(header_struct.size))
-            if magic != b"RPKM":
-                raise ValueError("Invalid pak master file.")
+        if not Pack._initalized:
+            self.files : list[str] = []
+            with open("pak_master.mrpk", "rb") as master_pak:
+                # Read and validate header
+                header_struct = struct.Struct("<4sHHH")
+                magic, version, entry_count, packs_offset = header_struct.unpack(master_pak.read(header_struct.size))
+                if magic != b"RPKM":
+                    raise ValueError("Invalid pak master file.")
 
-            # Read TOC entries
-            toc_entries = {}
-            for _ in range(entry_count):
-                name_length = struct.unpack("<H", master_pak.read(2))[0]
-                name = master_pak.read(name_length).decode("utf-8")
-                file_length = struct.unpack("<H", master_pak.read(2))[0]
-                file_name = master_pak.read(file_length).decode("utf-8")
-                offset = struct.unpack("<I", master_pak.read(4))[0]
-                toc_entries[name] = {"file": file_name, "offset": offset}
+                # Read TOC entries
+                toc_entries = {}
+                for _ in range(entry_count):
+                    name_length = struct.unpack("<H", master_pak.read(2))[0]
+                    name = master_pak.read(name_length).decode()
+                    file_length = struct.unpack("<H", master_pak.read(2))[0]
+                    file_name = master_pak.read(file_length).decode()
+                    offset = struct.unpack("<I", master_pak.read(4))[0]
+                    toc_entries[name] = {"file": file_name, "offset": offset}
 
-            self.packs = {}
-            for entry in toc_entries.values():
-                if entry["file"] not in self.packs:
-                    self.packs[entry["file"]] = open(entry["file"], "rb")
+                self.packs : dict[str, io.BufferedReader] = {}
+                for entry in toc_entries.values():
+                    if entry["file"] not in self.packs:
+                        self.packs[entry["file"]] = open(entry["file"], "rb")
 
-            self.toc = {name: entry for name, entry in toc_entries.items()}
-            self.files.extend([name for name in toc_entries.keys()])
+                self.toc = {name: entry for name, entry in toc_entries.items()}
+                self.files.extend([name for name in toc_entries.keys()])
 
-    def has_pack(self, pack_name: str):
-        pass
+        Pack._initalized = True
     
     def get(self, asset_name: str) -> bytes:
         if asset_name not in self.toc:
@@ -57,7 +58,7 @@ class Pack:
         name_length = struct.unpack("<H", pack_file.read(2))[0]
         pack_file.read(name_length)  # Skip name
         data_length = struct.unpack("<I", pack_file.read(4))[0]
-        data = pack_file.read(data_length) 
+        data = pack_file.read(data_length)
 
         return data
     
