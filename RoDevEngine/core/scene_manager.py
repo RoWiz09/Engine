@@ -200,8 +200,8 @@ class SceneManager:
                     name = os.path.split(file)[-1].removesuffix(".rshader")
 
                     shader_data = self.pack.get_as_json_dict(file)
-                    vertex_path = shader_data.get("VertexShader", "")
-                    fragment_path = shader_data.get("FragmentShader", "")
+                    vertex_path = shader_data.get("VertexShader", "assets\\GhostEngine\\base_shader.vert")
+                    fragment_path = shader_data.get("FragmentShader", "assets\\GhostEngine\\base_shader.frag")
                     
                     if vertex_path and fragment_path:
                         shaders[name] = ShaderProgram(self.pack.get(vertex_path), self.pack.get(fragment_path))
@@ -258,7 +258,7 @@ class SceneManager:
                     if shader:
                         img = None
                         if texture_path:
-                            img = image.open(self.pack.get(texture_path))
+                            img = image.open(self.pack.get_io(texture_path))
                         
                         materials[name] = Material(shader, img.tobytes() if img else None, img.size if img else None, properties)
                     else:
@@ -423,8 +423,8 @@ class SceneManager:
             spotlights.append(light)
         
         for shader in self.shaders.values():
-            shader.set_point_lights("uPointLights", pointlights)
-            shader.set_spot_lights("uSpotLights", spotlights)
+            shader.set_point_lights(pointlights)
+            shader.set_spot_lights(spotlights)
 
         for obj in self.game_objects:
             obj.update(dt, view, proj)

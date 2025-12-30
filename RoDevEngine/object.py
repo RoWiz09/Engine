@@ -81,7 +81,9 @@ class Object:
 
     @property
     def enabled(self) -> bool:
-        return self.__enabled
+        if self.__transform.parent is None:
+            return self.__enabled
+        return self.__enabled & self.transform.parent.gameobject.enabled
     
     @enabled.setter
     def enabled(self, enabled: bool):

@@ -2,6 +2,9 @@
 
 #define MAX_LIGHTS 64
 
+// ----------------------------------------------------
+// Per-frame uniforms
+// ----------------------------------------------------
 uniform vec3 uViewPos;
 uniform sampler2D uTexture;
 uniform vec2 uTileData;
@@ -12,52 +15,52 @@ in vec2 vTexCoord;
 
 out vec4 FragColor;
 
-// -------------------- Point Light --------------------
+// ----------------------------------------------------
+// Point Light (std140 safe)
+// ----------------------------------------------------
 struct PointLight {
-    vec3 position;
+    vec4 position;     // xyz = position, w = intensity
 
-    vec3 ambient;
-    vec3 diffuse;
-    vec3 specular;
-    vec3 color;
+    vec4 ambient;
+    vec4 diffuse;
+    vec4 specular;
+    vec4 color;
 
-    float constant;
-    float linear;
-    float quadratic;
-
-    float intensity;
-    float range;
+    vec4 attenuation;  // x=constant, y=linear, z=quadratic, w=range
 };
 
-uniform PointLight uPointLights[MAX_LIGHTS];
+layout(std140) uniform PointLightBlock {
+    PointLight pointLights[MAX_LIGHTS];
+};
+
 uniform int uNumPointLights;
 
-// -------------------- Spot Light --------------------
+// ----------------------------------------------------
+// Spot Light (std140 safe)
+// ----------------------------------------------------
 struct SpotLight {
-    vec3 position;      // world-space
-    vec3 direction;     // normalized (points outward)
+    vec4 position;     // xyz position
+    vec4 direction;    // xyz normalized
 
-    float cutOff;       // cos(inner angle)
-    float outerCutOff;  // cos(outer angle)
+    vec4 angles;       // x=cutOff, y=outerCutOff
+    vec4 color;
 
-    vec3 ambient;
-    vec3 diffuse;
-    vec3 specular;
-    vec3 color;
+    vec4 ambient;
+    vec4 diffuse;
+    vec4 specular;
 
-    float constant;
-    float linear;
-    float quadratic;
-
-    float intensity;
-    float range;
+    vec4 attenuation; // x=constant, y=linear, z=quadratic, w=range
 };
 
-uniform SpotLight uSpotLights[MAX_LIGHTS];
+layout(std140) uniform SpotLightBlock {
+    SpotLight spotLights[MAX_LIGHTS];
+};
+
 uniform int uNumSpotLights;
 
 // ----------------------------------------------------
-
+// Spot light calculation
+// ----------------------------------------------------
 vec3 CalcSpotLight(
     SpotLight light,
     vec3 normal,
@@ -65,18 +68,20 @@ vec3 CalcSpotLight(
     vec3 viewDir,
     vec3 albedo
 ) {
-    // Direction from fragment → light
-    vec3 lightDir = normalize(light.position - fragPos);
+    vec3 lightDir = normalize(light.position.xyz - fragPos);
+    float distance = length(light.position.xyz - fragPos);
 
-    // Distance check (hard range cutoff)
-    float distance = length(light.position - fragPos);
-    if (distance > light.range)
+    if (distance > light.attenuation.w)
         return vec3(0.0);
 
     // ----- Spotlight cone -----
-    float theta = dot(-lightDir, normalize(light.direction));
-    float epsilon = max(light.cutOff - light.outerCutOff, 0.0001);
-    float spotFactor = clamp((theta - light.outerCutOff) / epsilon, 0.0, 1.0);
+    float theta = dot(-lightDir, normalize(light.direction.xyz));
+    float epsilon = max(light.angles.x - light.angles.y, 0.0001);
+    float spotFactor = clamp(
+        (theta - light.angles.y) / epsilon,
+        0.0,
+        1.0
+    );
 
     if (spotFactor <= 0.0)
         return vec3(0.0);
@@ -88,28 +93,33 @@ vec3 CalcSpotLight(
     vec3 halfwayDir = normalize(lightDir + viewDir);
     float spec = pow(max(dot(normal, halfwayDir), 0.0), 32.0);
 
-    // ----- Attenuation (physical) -----
+    // ----- Attenuation -----
     float attenuation = 1.0 / (
-        light.constant +
-        light.linear * distance +
-        light.quadratic * distance * distance
+        light.attenuation.x +
+        light.attenuation.y * distance +
+        light.attenuation.z * distance * distance
     );
 
-    // ----- Lighting terms -----
-    vec3 ambient  = light.ambient * albedo;
-    vec3 diffuse  = light.diffuse * diff * albedo * light.color;
-    vec3 specular = light.specular * spec * light.color;
+    // ----- Lighting -----
+    vec3 ambient  = light.ambient.rgb * albedo;
+    vec3 diffuse  = light.diffuse.rgb * diff * albedo * light.color.rgb;
+    vec3 specular = light.specular.rgb * spec * light.color.rgb;
 
-    vec3 color = ambient + (diffuse + specular) * light.intensity;
+    vec3 result =
+        ambient +
+        (diffuse + specular) * light.position.w;
 
-    return color * attenuation * spotFactor;
+    return result * attenuation * spotFactor;
 }
 
+// ----------------------------------------------------
+// Main
+// ----------------------------------------------------
 void main()
 {
-    vec3 normal = normalize(vNormal);
+    vec3 normal  = normalize(vNormal);
     vec3 viewDir = normalize(uViewPos - vWorldPos);
-    vec3 albedo = texture(uTexture, vTexCoord * uTileData).rgb;
+    vec3 albedo  = texture(uTexture, vTexCoord * uTileData).rgb;
 
     vec3 result = vec3(0.0);
 
@@ -117,11 +127,12 @@ void main()
     int pointCount = min(uNumPointLights, MAX_LIGHTS);
     for (int i = 0; i < pointCount; ++i)
     {
-        PointLight light = uPointLights[i];
+        PointLight light = pointLights[i];
 
-        vec3 lightDir = normalize(light.position - vWorldPos);
-        float distance = length(light.position - vWorldPos);
-        if (distance > light.range)
+        vec3 lightDir = normalize(light.position.xyz - vWorldPos);
+        float distance = length(light.position.xyz - vWorldPos);
+
+        if (distance > light.attenuation.w)
             continue;
 
         float diff = max(dot(normal, lightDir), 0.0);
@@ -130,27 +141,29 @@ void main()
         float spec = pow(max(dot(normal, halfwayDir), 0.0), 32.0);
 
         float attenuation = 1.0 / (
-            light.constant +
-            light.linear * distance +
-            light.quadratic * distance * distance
+            light.attenuation.x +
+            light.attenuation.y * distance +
+            light.attenuation.z * distance * distance
         );
 
-        float rangeFade = 1.0 - clamp(distance / light.range, 0.0, 1.0);
+        float rangeFade = 1.0 - clamp(distance / light.attenuation.w, 0.0, 1.0);
         attenuation *= rangeFade * rangeFade;
 
-        vec3 ambient  = light.ambient * albedo;
-        vec3 diffuse  = diff * light.diffuse * albedo * light.color;
-        vec3 specular = spec * light.specular * light.color;
+        vec3 ambient  = light.ambient.rgb * albedo;
+        vec3 diffuse  = diff * light.diffuse.rgb * albedo * light.color.rgb;
+        vec3 specular = spec * light.specular.rgb * light.color.rgb;
 
-        result += (ambient + (diffuse + specular) * light.intensity) * attenuation;
+        result +=
+            (ambient + (diffuse + specular) * light.position.w)
+            * attenuation;
     }
 
     // -------- Spot Lights --------
-    int spotCount = min(uNumSpotLights, MAX_LIGHTS - pointCount);
+    int spotCount = min(uNumSpotLights, MAX_LIGHTS);
     for (int i = 0; i < spotCount; ++i)
     {
         result += CalcSpotLight(
-            uSpotLights[i],
+            spotLights[i],
             normal,
             vWorldPos,
             viewDir,

@@ -48,6 +48,7 @@ class Pack:
         Pack._initalized = True
     
     def get(self, asset_name: str) -> bytes:
+        asset_name = asset_name.replace("/", "\\")
         if asset_name not in self.toc:
             raise ValueError(f"Asset {asset_name} not found in the Table of Contents...")
 
@@ -59,6 +60,11 @@ class Pack:
         pack_file.read(name_length)  # Skip name
         data_length = struct.unpack("<I", pack_file.read(4))[0]
         data = pack_file.read(data_length)
+
+        return data
+    
+    def get_io(self, asset_name: str):
+        data = io.BytesIO(self.get(asset_name))
 
         return data
     
@@ -100,6 +106,24 @@ class Pack:
 
         # Keep track of offsets for TOC
         toc_entries = []
+
+        def write_file(asset_name: str, asset_data: str):
+            # Record current offset for this asset
+            toc_entries.append(
+                {
+                    "name": os.path.join(*asset_name.split("\\")).encode("utf-8"),
+                    "offset": pak_file.tell(),
+                    "file": pak_file.name.encode("utf-8")
+                }
+            )
+
+            # Write: [name_length (H)][name bytes][data_length (I)][data bytes]
+            name_bytes = asset_name.encode("utf-8")
+            pak_file.write(struct.pack("<H", len(name_bytes)))  # 2 bytes for name length
+            pak_file.write(name_bytes)                           # variable-length name
+            pak_file.write(struct.pack("<I", len(asset_data)))   # 4 bytes for data length
+            pak_file.write(asset_data)                           # actual asset data
+
         with open("pak_0.rpk", "wb+") as pak_file:
             # --- Write header ---
             # Magic(4s) + version(H) + asset_count(H)
@@ -115,21 +139,7 @@ class Pack:
                     # Only pack GhostEngine files in pak_0.rpk
                     continue
 
-                # Record current offset for this asset
-                toc_entries.append(
-                    {
-                        "name": asset_name.encode("utf-8"),
-                        "offset": pak_file.tell(),
-                        "file": pak_file.name.encode("utf-8")
-                    }
-                )
-
-                # Write: [name_length (H)][name bytes][data_length (I)][data bytes]
-                name_bytes = asset_name.encode("utf-8")
-                pak_file.write(struct.pack("<H", len(name_bytes)))  # 2 bytes for name length
-                pak_file.write(name_bytes)                           # variable-length name
-                pak_file.write(struct.pack("<I", len(asset_data)))   # 4 bytes for data length
-                pak_file.write(asset_data)                           # actual asset data
+                write_file(asset_name, asset_data)
 
                 assets.pop(asset_name)
 
@@ -144,21 +154,7 @@ class Pack:
 
             # --- Write engine asset blocks ---
             for asset_name, asset_data in assets.items():
-                # Record current offset for this asset
-                toc_entries.append(
-                    {
-                        "name": asset_name.encode("utf-8"),
-                        "offset": pak_file.tell(),
-                        "file": pak_file.name.encode("utf-8")
-                    }
-                )
-
-                # Write: [name_length (H)][name bytes][data_length (I)][data bytes]
-                name_bytes = asset_name.encode("utf-8")
-                pak_file.write(struct.pack("<H", len(name_bytes)))  # 2 bytes for name length
-                pak_file.write(name_bytes)                           # variable-length name
-                pak_file.write(struct.pack("<I", len(asset_data)))   # 4 bytes for data length
-                pak_file.write(asset_data)                           # actual asset data
+                write_file(asset_name, asset_data)
 
         # --- Write the master pak, which contains the TOC ---
         with open("pak_master.mrpk", "wb+") as master_pak:
@@ -172,8 +168,8 @@ class Pack:
 
             # Each entry in the TOC (length of entry name (H), entry name, length of pack name (H), pack name, and offset (I))
             for entry in toc_entries:
-                byte_content += struct.pack("<H", len(entry["name"].replace(b"\\", b"/")))
-                byte_content += entry["name"].replace(b"\\", b"/")
+                byte_content += struct.pack("<H", len(entry["name"]))
+                byte_content += entry["name"].replace(b"/", b"\\")
                 byte_content += struct.pack("<H", len(entry["file"]))
                 byte_content += entry["file"]
                 byte_content += struct.pack("<I", entry["offset"])

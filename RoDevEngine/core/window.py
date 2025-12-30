@@ -5,7 +5,7 @@ from .logger import Logger
 from .scene_manager import SceneManager
 from .input import Input
 
-from ..editor.editor_windows import Hierarchy, Inspector
+from ..editor import editor_windows
 
 import glfw
 import sys, os, OpenGL.GL as gl
@@ -67,16 +67,14 @@ class Window:
             os.environ['compiled'] = ""
         self.scene_manager = SceneManager()
 
-        self._created = True
+        Window._created = True
         self.editor = sys.argv[-1] == "--editor"
 
         if self.editor:
             imgui.create_context()
             self.editor_renderer = GlfwRenderer(self.window)
 
-            # Editor windows
-            self.hierarchy = Hierarchy()
-            self.inspector = Inspector()
+            self.open_windows: list[editor_windows.EditorWindow] = []
 
     def should_close(self):
         return glfw.window_should_close(self.window)
@@ -97,6 +95,15 @@ class Window:
 
         glfw.swap_buffers(self.window)
 
+    def open_editor_window(self, window: editor_windows.EditorWindow):
+        if not window.allow_multiple:
+            for idx, window_ in enumerate(self.open_windows):
+                if isinstance(window_, type(window)):
+                    self.open_windows[idx] = window
+                    return
+                
+        self.open_windows.append(window)
+
     def __render_editor_ui(self):
         self.editor_renderer.process_inputs()
 
@@ -104,17 +111,17 @@ class Window:
 
         with imgui.begin_main_menu_bar() as main_menu_bar:
             if main_menu_bar.opened:
-                with imgui.begin_menu("Scene", True) as scene_menu:
-                    if scene_menu.opened:
-                        if imgui.menu_item("Hierarchy", "Ctrl+H")[1]:
-                            self.hierarchy.active = True
+                for menu, windows in editor_windows.menu_registry.items():
+                    with imgui.begin_menu(menu, True) as menu:
+                        if menu.opened:
+                            for window in windows:
+                                if imgui.menu_item(window.__name__)[1]:
+                                    self.open_windows.append(window())
 
-        obj = self.hierarchy.render()
-        if obj:
-            self.inspector.object = obj
-            self.inspector.active = True
-            
-        self.inspector.render()
+        for idx, window in enumerate(self.open_windows.copy()):
+            kill = window.render()
+            if kill:
+                self.open_windows.pop(idx)
 
         imgui.render()
         self.editor_renderer.render(imgui.get_draw_data())

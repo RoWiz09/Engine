@@ -1,48 +1,58 @@
+from __future__ import annotations
 from collections.abc import Iterable
 
 from ..core.scene_manager import SceneManager
 from ..object import Object
 from ..scripts.behavior import Behavior, EditorField
+
+from ..core.logger import Logger
 from pyglm import glm
 
 import imgui
 
-class Window:
-    def __init__(self, window_name, **kwargs):
-        self.active = kwargs.get("active", False)
-        self.name = window_name
+menu_registry: dict[str, list[object]] = {}
+def register_menu(name: str):
+    global menu_registry
 
-    def render(self):
-        if not self.active:
-            return None
-        
-        window = imgui.begin(self.name, True)
+    menu_registry[name] = []
+
+register_menu("Scene")
+
+class EditorWindow:
+    menu = None
+    allow_multiple = True
+
+    def __init_subclass__(cls: object):
+        if cls.menu in menu_registry:
+            menu_registry[cls.menu].append(cls)
+
+    def render(self) -> bool:
+        window = imgui.begin(type(self).__name__, True)
         if not window.opened:
-            self.active = False
             imgui.end()
             return None
 
         return window
 
-class Hierarchy(Window):
-    def __init__(self, **kwargs):
-        super().__init__("Hierarchy", **kwargs)
+class Hierarchy(EditorWindow):
+    menu = "Scene"
 
     def render(self) -> Object | None:
         window = super().render()
         if not window:
-            return
-        
-        out = None
+            return True
 
         obj_id = 0
         
+        from ..core.window import Window
         with window:
             hierarchy = SceneManager().get_by_hierarchy()[None]
             
             for obj, children in hierarchy.items():
                 if imgui.button(obj.name, 200):
-                    out = obj
+                    inspector = Inspector()
+                    inspector.object = obj
+                    Window().open_editor_window(inspector)
 
                 steps = {}
                 child_idx = 0
@@ -54,7 +64,10 @@ class Hierarchy(Window):
                         imgui.set_cursor_pos_x(20 * (len(steps) + 1) + 8)
                         imgui.push_id(str(obj_id))
                         if imgui.button(child_obj.name, 200 - 20 * (len(steps) + 1)):
-                            out = child_obj
+                            inspector = Inspector()
+                            inspector.object = child_obj
+                            Window().open_editor_window(inspector)
+
                         imgui.pop_id()
 
                         child_idx += 1
@@ -72,25 +85,26 @@ class Hierarchy(Window):
                         else:
                             cur_children, child_idx = list(steps.values())[-1]
                             steps = dict(list(steps.items())[:-1])
-            
-        return out
 
-class Inspector(Window):
-    def __init__(self, **kwargs):
-        super().__init__("Inspector", **kwargs)
+        return False
+
+class Inspector(EditorWindow):
+    allow_multiple = False
+    def __init__(self):
         self.object: Object = None
 
     def render(self):
         if self.object is None:
-            return
+            Logger("EDITOR").log_error("An inspector is missing an object! How did that happen?!")
+            return True
         
         window = super().render()
         if not window:
-            return
+            return True
         
         with window:
             width = imgui.get_window_width()
-            changed, value = imgui.input_text_with_hint("Name:", "Gameobject Name", self.object.name)
+            changed, value = imgui.input_text_with_hint("Name:", "Object Name", self.object.name)
             imgui.same_line()
             imgui.set_cursor_pos_x(width - 40)
             changed2, val = imgui.checkbox("", self.object.enabled)
@@ -164,3 +178,5 @@ class Inspector(Window):
                         if imgui.button(name, 100):
                             self.object.add_component(script(self.object))
                             imgui.close_current_popup()
+
+        return False
