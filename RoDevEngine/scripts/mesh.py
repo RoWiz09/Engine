@@ -202,7 +202,6 @@ class Submesh:
         self._ebo = shared["ebo"]
 
     def update(self):
-        print("test")
         if self._vao is None:
             Logger("CORE").log_warning("SubMesh.update called before buffers created. Creating now.")
             self._create_or_get_buffers()
