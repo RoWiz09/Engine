@@ -10,7 +10,7 @@ if os.path.isfile("logs/last_log.log"):
 if os.path.isfile("logs/latest.log"):
     os.rename("logs/latest.log", "logs/last_log.log")
 
-_log_file = open("logs/latest.log", "a")
+_log_file = open("logs/latest.log", "a+")
 
 log_to_console = False
 

@@ -2,6 +2,8 @@ from .behavior import *
 from pyglm import glm
 
 class Camera(Behavior):
+    category = "Rendering"
+
     rotation_mod = EditorField("vec3", glm.vec3())
     position_mod = EditorField("vec3", glm.vec3())
 

@@ -101,4 +101,9 @@ Thumbs.db
 # ini files
 *.ini
 
+# Logs
 logs/
+
+# Game Packs
+*.rpk
+*.mrpk

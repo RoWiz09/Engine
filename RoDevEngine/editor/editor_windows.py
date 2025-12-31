@@ -10,7 +10,7 @@ from pyglm import glm
 
 import imgui
 
-menu_registry: dict[str, list[object]] = {}
+menu_registry: dict[str, list[EditorWindow]] = {}
 def register_menu(name: str):
     global menu_registry
 
@@ -21,6 +21,7 @@ register_menu("Scene")
 class EditorWindow:
     menu = None
     allow_multiple = True
+    keybind = ""
 
     def __init_subclass__(cls: object):
         if cls.menu in menu_registry:
@@ -36,6 +37,7 @@ class EditorWindow:
 
 class Hierarchy(EditorWindow):
     menu = "Scene"
+    keybind = "Ctrl+H"
 
     def render(self) -> Object | None:
         window = super().render()
@@ -92,6 +94,7 @@ class Inspector(EditorWindow):
     allow_multiple = False
     def __init__(self):
         self.object: Object = None
+        self.cur_comp_category = None
 
     def render(self):
         if self.object is None:
@@ -140,43 +143,56 @@ class Inspector(EditorWindow):
 
                 # --- Iterate over EditorFields on the class ---
                 for var_name, field in vars(type(component)).items():
-                    if not isinstance(field, EditorField):
-                        continue  # skip non-editor fields
-
                     imgui.push_id(str(var_id))
-                    value = getattr(component, var_name)
-                    
-                    field_type = field.type.lower()
-                    if field_type == "bool":
-                        changed, val = imgui.checkbox(var_name, value)
-                    elif field_type == "int":
-                        changed, val = imgui.input_int(var_name, value)
-                    elif field_type == "float":
-                        changed, val = imgui.input_float(var_name, value)
-                    elif field_type == "vec3":
-                        changed, vals = imgui.input_float3(var_name, *value)
-                        val = glm.vec3(vals) if changed else value
-                    elif field_type == "str":
-                        changed, val = imgui.input_text(var_name, value)
-                    else:
-                        changed = False
-                        val = value
+                    if isinstance(field, EditorField):
+                        value = getattr(component, var_name)
+                        
+                        field_type = field.type.lower()
+                        if field_type == "bool":
+                            changed, val = imgui.checkbox(var_name, value)
+                        elif field_type == "int":
+                            changed, val = imgui.input_int(var_name, value)
+                        elif field_type == "float":
+                            changed, val = imgui.input_float(var_name, value)
+                        elif field_type == "vec3":
+                            changed, vals = imgui.input_float3(var_name, *value)
+                            val = glm.vec3(vals) if changed else value
+                        elif field_type == "str":
+                            changed, val = imgui.input_text(var_name, value)
+                        else:
+                            changed = False
+                            val = value
 
-                    if changed:
-                        setattr(component, var_name, val)
+                        if changed:
+                            setattr(component, var_name, val)
+
+                    elif field in Behavior.editor_button_registry:
+                        imgui.button(var_name, imgui.get_window_width())
 
                     imgui.pop_id()
                     var_id += 1
-
             imgui.separator()
             if imgui.button("Add Component"):
                 imgui.open_popup("Components")
 
             with imgui.begin_popup("Components") as comp_popup:
                 if comp_popup:
-                    for name, script in Behavior.registry.items():
-                        if imgui.button(name, 100):
-                            self.object.add_component(script(self.object))
-                            imgui.close_current_popup()
+                    if self.cur_comp_category is None:
+                        for name in Behavior.component_category_registry.keys():
+                            if name is None:
+                                Logger("EDITOR").log_warning("Script category cannot be None!")
+                            elif imgui.button(name, 100):
+                                self.cur_comp_category = name
+
+                    else:
+                        if imgui.button("Back", 100):
+                            self.cur_comp_category = None
+                            return False
+
+                        for script in Behavior.component_category_registry[self.cur_comp_category]:
+                            if imgui.button(script.__name__, 100):
+                                self.object.add_component(script(self.object))
+                                self.cur_comp_category = None
+                                imgui.close_current_popup()
 
         return False

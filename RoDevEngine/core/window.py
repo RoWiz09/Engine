@@ -115,7 +115,7 @@ class Window:
                     with imgui.begin_menu(menu, True) as menu:
                         if menu.opened:
                             for window in windows:
-                                if imgui.menu_item(window.__name__)[1]:
+                                if imgui.menu_item(window.__name__, window.keybind)[1]:
                                     self.open_windows.append(window())
 
         for idx, window in enumerate(self.open_windows.copy()):

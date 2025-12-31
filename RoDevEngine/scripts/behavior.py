@@ -1,10 +1,18 @@
+from __future__ import annotations
+
 from ..core.logger import Logger
 import sys
 
+def register_editor_button(func):
+    Behavior.editor_button_registry.append(func)
+    return func
+
 class Behavior:
-    registry = {}
+    component_category_registry: dict[str, list[Behavior]] = {}
     editor_visible = True
     category = "General"
+    
+    editor_button_registry = []
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -12,8 +20,10 @@ class Behavior:
         # Skip abstract base classes
         if cls is Behavior:
             return
-
-        Behavior.registry[cls.__name__] = cls
+        
+        if not cls.category in Behavior.component_category_registry.keys():
+            Behavior.component_category_registry[cls.category] = []
+        Behavior.component_category_registry[cls.category].append(cls)
         
     def __init__(self, gameobject):
         from RoDevEngine.object import Object
@@ -41,7 +51,7 @@ class Behavior:
     def window(self):
         from ..core.window import Window
         return Window()
-
+    
     def update(self, dt:float):
         """
             Runs every tick.

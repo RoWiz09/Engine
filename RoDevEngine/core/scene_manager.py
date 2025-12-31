@@ -47,13 +47,18 @@ class SceneManager:
         self.materials = self.get_materials(self.shaders)
         self.game_objects: list[Object] = []
 
-        def get_scripts():
+        def get_scripts():            
+            if self.compiled:
+                Logger("CORE").log_warning("Tried to get scripts while compiled!")
+                return
+            
             for dirpath, dirnames, files in os.walk("assets"):
                 for filename in files:
                     if filename.endswith(".py"):
-                        importlib.import_module(os.path.join(dirpath, filename).replace(os.path.sep, ".").removesuffix(".py"))
+                        importlib.import_module(os.path.join(dirpath, filename).replace(os.path.sep, ".").removesuffix(".py"))                
 
-        get_scripts()
+        if sys.argv[-1] == "--editor":
+            get_scripts()
 
         self.scripts = {}
 

@@ -3,12 +3,15 @@ from pyglm.glm import vec3, quat
 from enum import Enum
 
 class Pointlight(Behavior):
+    category = "Rendering"
     ambient = vec3()
     diffuse = vec3()
     specular = vec3()
 
     intensity = EditorField("float", 1)
     color = EditorField("vec3", vec3())
+
+    range = EditorField("float", 1)
 
     def __init__(self, gameobject):
         super().__init__(gameobject)  
