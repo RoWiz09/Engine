@@ -4,9 +4,9 @@ from enum import Enum
 
 class Pointlight(Behavior):
     category = "Rendering"
-    ambient = vec3()
-    diffuse = vec3()
-    specular = vec3()
+    ambient = EditorField("vec3", vec3())
+    diffuse = EditorField("vec3", vec3())
+    specular = EditorField("vec3", vec3())
 
     intensity = EditorField("float", 1)
     color = EditorField("vec3", vec3())
@@ -21,9 +21,9 @@ class Pointlight(Behavior):
         self.quadratic = 0.0
 
 class Spotlight(Behavior):
-    ambient = vec3()
-    diffuse = vec3()
-    specular = vec3()
+    ambient = EditorField("vec3", vec3())
+    diffuse = EditorField("vec3", vec3())
+    specular = EditorField("vec3", vec3())
 
     intensity = EditorField("float", 1)
     color = EditorField("vec3", vec3())

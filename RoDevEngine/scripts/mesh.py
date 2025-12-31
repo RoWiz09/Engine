@@ -23,7 +23,7 @@ class Mesh(Behavior):
     def __init__(self, gameobject):
         super().__init__(gameobject)
         self._run_in_editor = True
-        
+
         self.submeshes: list[Submesh] = []
     
     @classmethod
@@ -65,6 +65,8 @@ class Mesh(Behavior):
                 vertices.clear()
                 indices.clear()
 
+                vertex_map.clear()
+
                 cur_mesh = Submesh(game_object)
 
             elif line.startswith("v "):
@@ -105,8 +107,8 @@ class Mesh(Behavior):
                             vertex_map[key] = len(vertices) // 8
                             vertices.extend([
                                 px, py, pz,
-                                u, v_,
-                                nx, ny, nz
+                                nx, ny, nz,
+                                u, v_
                             ])
 
                         indices.append(vertex_map[key])
@@ -127,7 +129,7 @@ class Mesh(Behavior):
         return mesh
     
     @register_editor_button
-    def reload_mesh(self):
+    def reload_obj(self):
         submeshes = []
         cur_mesh = None
 
@@ -135,10 +137,10 @@ class Mesh(Behavior):
         normals = []
         tex_coords = []
 
-        vertices = []   # interleaved vertex data
+        vertices = []
         indices = []
 
-        vertex_map = {}  # (v, vt, vn) -> index
+        vertex_map = {}  # v, vn, vt
 
         lines = []
 
@@ -168,6 +170,8 @@ class Mesh(Behavior):
 
                 vertices.clear()
                 indices.clear()
+
+                vertex_map.clear()
 
                 cur_mesh = Submesh(self.gameobject)
 
@@ -209,8 +213,8 @@ class Mesh(Behavior):
                             vertex_map[key] = len(vertices) // 8
                             vertices.extend([
                                 px, py, pz,
-                                u, v_,
-                                nx, ny, nz
+                                nx, ny, nz,
+                                u, v_
                             ])
 
                         indices.append(vertex_map[key])
@@ -310,9 +314,6 @@ class Submesh:
 
         model = self.gameobject.transform.get_model_matrix()
         self.gameobject.mat.shader.set_mat4("uModel", model)
-
-        normalMatrix = glm.mat3(glm.transpose(glm.inverse(model)))
-        self.gameobject.mat.shader.set_mat3("uNormalMatrix", normalMatrix)
 
         GL.glBindVertexArray(self._vao)
         count = Mesh._mesh_registry[self._mesh_id]["count"]

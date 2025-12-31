@@ -241,19 +241,18 @@ class ShaderProgram:
 
         for i, light in enumerate(lights):
             forward = glm.vec3(0, 0, 1)
+
             direction = glm.normalize(
-                light.gameobject.transform.rot *
-                glm.quat(glm.radians(light.direction)) *
-                forward
+                light.gameobject.transform.rot * forward
             )
 
             data = SpotLightUBO(
-                (*light.gameobject.transform.pos, 0.0),
+                (*light.gameobject.transform.pos, light.intensity),
                 (*direction, 0.0),
 
                 (glm.cos(light.cutOff),
-                 glm.cos(light.outerCutOff),
-                 0.0, 0.0),
+                glm.cos(light.outerCutOff),
+                0.0, 0.0),
 
                 (*light.color, 0.0),
                 (*light.ambient, 0.0),
@@ -261,9 +260,9 @@ class ShaderProgram:
                 (*light.specular, 0.0),
 
                 (light.constant,
-                 light.linear,
-                 light.quadratic,
-                 light.range)
+                light.linear,
+                light.quadratic,
+                light.range)
             )
 
             glBufferSubData(
