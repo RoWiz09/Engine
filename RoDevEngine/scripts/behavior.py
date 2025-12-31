@@ -9,7 +9,6 @@ def register_editor_button(func):
 
 class Behavior:
     component_category_registry: dict[str, list[Behavior]] = {}
-    editor_visible = True
     category = "General"
     
     editor_button_registry = []

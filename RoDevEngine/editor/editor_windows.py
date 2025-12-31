@@ -167,10 +167,12 @@ class Inspector(EditorWindow):
                             setattr(component, var_name, val)
 
                     elif field in Behavior.editor_button_registry:
-                        imgui.button(var_name, imgui.get_window_width())
+                        if imgui.button(var_name, imgui.get_window_width()):
+                            getattr(component, var_name)()
 
                     imgui.pop_id()
                     var_id += 1
+
             imgui.separator()
             if imgui.button("Add Component"):
                 imgui.open_popup("Components")

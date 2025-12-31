@@ -1,4 +1,4 @@
-from .behavior import Behavior, register_editor_button
+from .behavior import Behavior, register_editor_button, EditorField
 from ..core.logger import Logger
 
 from ..core.packer import Pack
@@ -17,16 +17,13 @@ class Mesh(Behavior):
     # Class-level registry for shared mesh data
     _mesh_registry = {}
 
+    mesh_path = EditorField('str', "")
+    mesh_name = EditorField('str', "")
+
     def __init__(self, gameobject):
         super().__init__(gameobject)
         self._run_in_editor = True
-
-        self.mesh_path = None
-        self.mesh_name = None
-
-        self.last_mesh_path = None
-        self.last_mesh_name = None
-
+        
         self.submeshes: list[Submesh] = []
     
     @classmethod
@@ -124,6 +121,9 @@ class Mesh(Behavior):
         mesh = cls(game_object)
         mesh.submeshes = submeshes
 
+        mesh.mesh_name = file_name
+        mesh.mesh_path = file_path
+
         return mesh
     
     @register_editor_button
@@ -144,7 +144,7 @@ class Mesh(Behavior):
 
         file_path = self.mesh_path
         file_name = self.mesh_name
-        
+
         if not "compiled" in os.environ.keys():
             with open(os.path.join(*file_path.split("."), file_name)) as file:
                 lines = file.readlines()
@@ -221,6 +221,8 @@ class Mesh(Behavior):
         cur_mesh._create_or_get_buffers()
 
         submeshes.append(cur_mesh)
+
+        self.submeshes = submeshes
     
     def update(self, dt):
         if not self.enabled:

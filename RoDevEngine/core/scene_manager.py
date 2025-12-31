@@ -357,6 +357,9 @@ class SceneManager:
     def get_objects_with_component(self, component_class) -> list[Object]:
         objects = []
         for object in self.game_objects:
+            if not object.enabled:
+                continue
+            
             if object.get_component(component_class):
                 objects.append(object)
         
