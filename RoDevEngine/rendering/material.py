@@ -7,6 +7,19 @@ import PIL.Image as image
 from ..core.logger import Logger
 from ..rendering.shader_program import ShaderProgram
 
+class register_mat:
+    def __init__(self, cls):
+        self.cls = cls
+
+    def __call__(self, name, *args, **kwds):
+        mat_cls = self.cls(*args)
+
+        from ..core.scene_manager import SceneManager
+        SceneManager().materials[name] = mat_cls
+
+        return mat_cls
+
+@register_mat
 class Material:
     def __init__(self, shader: ShaderProgram, texture_data: Optional[bytes], texture_size: Optional[tuple[int, int]] = None, properties: Optional[dict] = None):
         self.shader = shader

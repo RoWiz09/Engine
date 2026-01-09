@@ -11,8 +11,6 @@ class Camera(Behavior):
     def __init__(self, gameobject):
         super().__init__(gameobject)
 
-        self.player_camera = True # If the camera is supposed to be looked through by the player.
-
         self._run_in_editor = True
     
     def on_scene_load(self, scene_info):

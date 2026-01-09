@@ -116,7 +116,10 @@ class Window:
                         if menu.opened:
                             for window in windows:
                                 if imgui.menu_item(window.__name__, window.keybind)[1]:
-                                    self.open_windows.append(window())
+                                    if issubclass(window, editor_windows.EditorWindow):
+                                        self.open_windows.append(window())
+                                    else:
+                                        window.on_click()
 
         for idx, window in enumerate(self.open_windows.copy()):
             kill = window.render()

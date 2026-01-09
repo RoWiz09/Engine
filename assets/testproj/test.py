@@ -2,6 +2,8 @@ from RoDevEngine.scripts.behavior import *
 from RoDevEngine.core.input import KeyCodes, Input, CursorStates, MouseButtons
 from RoDevEngine import get_logger
 
+from RoDevEngine.editor.editor_windows import EditorWindow, register_menu
+
 from pyglm import glm
 
 class Test(Behavior):
@@ -11,7 +13,7 @@ class Test(Behavior):
         super().__init__(gameobject)
 
     def on_scene_load(self, scene_info):
-        Input().set_cursor_visibility(CursorStates.HIDDEN)
+        # Input().set_cursor_visibility(CursorStates.HIDDEN)
         get_logger("MY LOGGER").log_info(f"Cool, we loaded {scene_info}")
 
     def update(self, dt):

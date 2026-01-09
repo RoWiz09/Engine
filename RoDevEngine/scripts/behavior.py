@@ -7,6 +7,35 @@ def register_editor_button(func):
     Behavior.editor_button_registry.append(func)
     return func
 
+class init_method:
+    """
+        Sets the decorated method to be the method used when initalizing the class. \n
+        Automatically passes through the class type to create instances with.
+    """
+    def __init__(self, func):
+        self.func = func
+        self.vars = []
+
+    def __set_name__(self, owner: Behavior, name):
+        owner.init_method = self
+        self.owner = owner
+
+    def __call__(self, *args):
+        vars = args[:-1]
+        cls = self.func(self.owner, *args)
+        setattr(cls, "init_vars", vars)
+        return cls
+    
+    def refresh_vars(self, func, *args):
+        """
+            call this when modifying any variables needed for initalization for correct saving in the editor.
+        """
+        def wrapper(cls, *args):
+            func(cls, *args)
+            setattr(cls, "init_vars", args)
+
+        return wrapper
+
 class Behavior:
     component_category_registry: dict[str, list[Behavior]] = {}
     category = "General"
@@ -31,6 +60,9 @@ class Behavior:
 
         self._run_in_editor = False
     
+    init_method = None
+    init_vars = []
+
     @property
     def gameobject(self):
         return self.__gameobject
@@ -97,3 +129,4 @@ class EditorField:
 
     def __set__(self, instance, value):
         instance.__dict__[self.name] = value
+        

@@ -16,7 +16,9 @@ def register_menu(name: str):
 
     menu_registry[name] = []
 
+register_menu("File")
 register_menu("Scene")
+register_menu("Other")
 
 class EditorWindow:
     menu = None
@@ -48,10 +50,15 @@ class Hierarchy(EditorWindow):
         
         from ..core.window import Window
         with window:
-            hierarchy = SceneManager().get_by_hierarchy()[None]
+            width = imgui.get_window_width() - 15
+
+            if imgui.button("Create New Object", width):
+                SceneManager().game_objects.append(Object("New Gameobject", SceneManager().materials["base_mat"]))
+
+            hierarchy = SceneManager().get_hierarchy()[None]
             
             for obj, children in hierarchy.items():
-                if imgui.button(obj.name, 200):
+                if imgui.button(obj.name, width):
                     inspector = Inspector()
                     inspector.object = obj
                     Window().open_editor_window(inspector)
@@ -65,7 +72,7 @@ class Hierarchy(EditorWindow):
 
                         imgui.set_cursor_pos_x(20 * (len(steps) + 1) + 8)
                         imgui.push_id(str(obj_id))
-                        if imgui.button(child_obj.name, 200 - 20 * (len(steps) + 1)):
+                        if imgui.button(child_obj.name, width - 20 * (len(steps) + 1)):
                             inspector = Inspector()
                             inspector.object = child_obj
                             Window().open_editor_window(inspector)
@@ -101,6 +108,8 @@ class Inspector(EditorWindow):
             Logger("EDITOR").log_error("An inspector is missing an object! How did that happen?!")
             return True
         
+        imgui.set_next_window_size(300, 400)
+        
         window = super().render()
         if not window:
             return True
@@ -129,13 +138,21 @@ class Inspector(EditorWindow):
                 self.object.transform.scale = glm.vec3(values)
 
             var_id = 0
+            component_ids = {}
             for component in self.object.components:
                 imgui.separator()
+                
+                if not type(component) in component_ids.keys():
+                    component_ids[type(component)] = 1
+
+                imgui.begin_child(type(component).__name__ + " " + str(component_ids[type(component)]), width = 280, height = 100, border = True)
+                component_ids[type(component)] += 1
+
                 imgui.text(type(component).__name__)
                 imgui.same_line()
-                imgui.set_cursor_pos_x(width - 100)
+                imgui.set_cursor_pos_x(280 - 40)
                 imgui.push_id(str(var_id))
-                changed, val = imgui.checkbox("Active: ", component.enabled)
+                changed, val = imgui.checkbox("", component.enabled)
                 imgui.pop_id()
                 var_id += 1
                 if changed:
@@ -172,6 +189,8 @@ class Inspector(EditorWindow):
 
                     imgui.pop_id()
                     var_id += 1
+                
+                imgui.end_child()
 
             imgui.separator()
             if imgui.button("Add Component"):
@@ -198,3 +217,34 @@ class Inspector(EditorWindow):
                                 imgui.close_current_popup()
 
         return False
+    
+class Gizmos(EditorWindow):
+    menu = "Other"
+
+    def render(self):
+        window = super().render()
+        if not window:
+            return True
+        
+        with window:        
+            changed, state = imgui.checkbox("Use Lights", not SceneManager().disable_lighting)
+            if changed:
+                SceneManager().disable_lighting = not state
+
+class MenuObject:
+    menu = None
+    keybind = ""
+
+    def __init_subclass__(cls: object):
+        if cls.menu in menu_registry:
+            menu_registry[cls.menu].append(cls)
+
+    def on_click():
+        pass
+    
+class Save(MenuObject):
+    menu = "File"
+    keybind = "Ctrl+S"
+    
+    def on_click():
+        SceneManager().save()

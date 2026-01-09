@@ -1,4 +1,4 @@
-from .behavior import Behavior, register_editor_button, EditorField
+from .behavior import Behavior, EditorField, init_method, register_editor_button
 from ..core.logger import Logger
 
 from ..core.packer import Pack
@@ -25,8 +25,8 @@ class Mesh(Behavior):
         self._run_in_editor = True
 
         self.submeshes: list[Submesh] = []
-    
-    @classmethod
+
+    @init_method
     def create_from_obj(cls, file_path: str, file_name: str, game_object: Object):
         submeshes = []
         cur_mesh = None
@@ -129,7 +129,11 @@ class Mesh(Behavior):
         return mesh
     
     @register_editor_button
-    def reload_obj(self):
+    def refresh(self):
+        self.reload_obj(self.mesh_path, self.mesh_name)
+
+    @create_from_obj.refresh_vars
+    def reload_obj(self, file_path, file_name):
         submeshes = []
         cur_mesh = None
 
@@ -143,9 +147,6 @@ class Mesh(Behavior):
         vertex_map = {}  # v, vn, vt
 
         lines = []
-
-        file_path = self.mesh_path
-        file_name = self.mesh_name
 
         if not "compiled" in os.environ.keys():
             with open(os.path.join(*file_path.split("."), file_name)) as file:

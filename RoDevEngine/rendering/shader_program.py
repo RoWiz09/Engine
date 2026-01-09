@@ -132,10 +132,6 @@ class ShaderProgram:
 
         glBindBuffer(GL_UNIFORM_BUFFER, 0)
 
-    # -------------------------------------------------
-    # Shader usage helpers
-    # -------------------------------------------------
-
     def use(self):
         glUseProgram(self.program_id)
 
@@ -144,10 +140,6 @@ class ShaderProgram:
             self.use()
             return func(self, *args, **kwargs)
         return wrapper
-
-    # -------------------------------------------------
-    # Standard uniforms (unchanged)
-    # -------------------------------------------------
 
     @_use_shader
     def set_mat4(self, name: str, matrix: glm.mat4x4):
@@ -188,11 +180,12 @@ class ShaderProgram:
         loc = glGetUniformLocation(self.program_id, name)
         if loc != -1:
             glUniform1i(loc, value)
-        return loc
-
-    # -------------------------------------------------
-    # UBO Light Uploads
-    # -------------------------------------------------
+    
+    @_use_shader
+    def set_bool(self, name: str, value: bool):
+        loc = glGetUniformLocation(self.program_id, name)
+        if loc != -1:
+            glUniform1i(loc, int(value))
 
     @_use_shader
     def set_point_lights(self, lights: list[Pointlight]):
@@ -273,8 +266,6 @@ class ShaderProgram:
             )
 
         glBindBuffer(GL_UNIFORM_BUFFER, 0)
-
-    # -------------------------------------------------
 
     def delete(self):
         if self.program_id:

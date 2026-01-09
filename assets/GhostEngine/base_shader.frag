@@ -6,6 +6,8 @@ uniform vec3 uViewPos;
 uniform sampler2D uTexture;
 uniform vec2 uTileData;
 
+uniform bool uDisableLighting;
+
 in vec3 vNormal;
 in vec3 vWorldPos;
 in vec2 vTexCoord;
@@ -63,9 +65,11 @@ vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
     float rangeFade = 1.0 - clamp(distance / light.attenuation.w, 0.0, 1.0);
     atten *= rangeFade * rangeFade;
 
-    vec3 ambient  = light.ambient.rgb * light.color.rgb;
-    vec3 diffuse  = light.diffuse.rgb  * diff * light.color.rgb;
-    vec3 specular = light.specular.rgb * spec * light.color.rgb;
+    vec3 color = light.color.rgb / vec3(255.0, 255.0, 255.0);
+
+    vec3 ambient  = light.ambient.rgb * color;
+    vec3 diffuse  = light.diffuse.rgb  * diff * color;
+    vec3 specular = light.specular.rgb * spec * color;
 
     return (ambient + (diffuse + specular)) * atten * light.position.w;
 }
@@ -94,9 +98,11 @@ vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
     float rangeFade = 1.0 - clamp(distance / light.attenuation.w, 0.0, 1.0);
     atten *= rangeFade * rangeFade;
 
-    vec3 ambient  = light.ambient.rgb * light.color.rgb;
-    vec3 diffuse  = light.diffuse.rgb  * diff * light.color.rgb;
-    vec3 specular = light.specular.rgb * spec * light.color.rgb;
+    vec3 color = light.color.rgb / vec3(255.0, 255.0, 255.0);
+
+    vec3 ambient  = light.ambient.rgb * color;
+    vec3 diffuse  = light.diffuse.rgb  * diff * color;
+    vec3 specular = light.specular.rgb * spec * color;
 
     vec3 result = ambient + diffuse + specular;
 
@@ -110,17 +116,23 @@ void main()
     vec3 viewDir = normalize(uViewPos - vWorldPos);
     vec3 albedo  = texture(uTexture, vTexCoord * uTileData).rgb;
 
-    vec3 result = vec3(0.0);
+    if (!uDisableLighting) {
+        vec3 result = vec3(0.0);
 
-    int pointCount = min(uNumPointLights, MAX_LIGHTS);
-    for(int i=0; i<pointCount; ++i)
-        result += CalcPointLight(pointLights[i], normal, vWorldPos, viewDir);
+        int pointCount = min(uNumPointLights, MAX_LIGHTS);
+        for(int i=0; i<pointCount; ++i)
+            result += CalcPointLight(pointLights[i], normal, vWorldPos, viewDir);
 
-    int spotCount = min(uNumSpotLights, MAX_LIGHTS);
-    for(int i=0; i<spotCount; ++i)
-        result += CalcSpotLight(spotLights[i], normal, vWorldPos, viewDir);
+        int spotCount = min(uNumSpotLights, MAX_LIGHTS);
+        for(int i=0; i<spotCount; ++i)
+            result += CalcSpotLight(spotLights[i], normal, vWorldPos, viewDir);
+            
+        FragColor = vec4(result * albedo, 1.0);
+    }
+    else {
+        FragColor = vec4(albedo, 1.0);
+    }
 
-    FragColor = vec4(result * albedo, 1.0);
 
     // if (!gl_FrontFacing)
     //     FragColor = vec4(1, 0, 0, 1);

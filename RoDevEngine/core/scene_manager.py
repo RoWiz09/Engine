@@ -1,7 +1,7 @@
 from ..rendering.shader_program import ShaderProgram
 from ..scripts.camera import Camera
 from ..rendering.material import Material
-from ..scripts.behavior import Behavior
+from ..scripts.behavior import Behavior, EditorField
 from .transform import Transform
 from ..scripts.light import Pointlight, Spotlight
 from .packer import Pack
@@ -25,6 +25,13 @@ class SceneInfo:
     scene_name: str
     scene_index: int
 
+def check_iterable(field):
+    try: 
+        iter(field)
+        return True
+    except:
+        return False
+
 class SceneManager:
     _instance = None
     _created = False
@@ -38,29 +45,33 @@ class SceneManager:
         if SceneManager._created:
             return
         
+        self.materials = {}
+        SceneManager._created = True
+        
         self.compiled = not os.path.isfile(".rproj") # If there is a .rproj file, then the project has not been built yet.
         if self.compiled:
             self.pack = Pack()
 
         self.scenes = self.get_scenes()
         self.shaders = self.get_shaders()
-        self.materials = self.get_materials(self.shaders)
+        self.get_materials(self.shaders)
         self.game_objects: list[Object] = []
 
         def get_scripts():            
             if self.compiled:
-                Logger("CORE").log_warning("Tried to get scripts while compiled!")
-                return
+                Logger("CORE").log_fatal("Tried to get scripts while compiled!")
+
+            scripts = {}
             
             for dirpath, dirnames, files in os.walk("assets"):
                 for filename in files:
                     if filename.endswith(".py"):
-                        importlib.import_module(os.path.join(dirpath, filename).replace(os.path.sep, ".").removesuffix(".py"))                
+                        module = importlib.import_module(os.path.join(dirpath, filename).replace(os.path.sep, ".").removesuffix(".py"))        
+
+            return scripts
 
         if sys.argv[-1] == "--editor":
-            get_scripts()
-
-        self.scripts = {}
+            self.scripts = get_scripts()
 
         self.last_time = glfw.get_time()
         self.accumulator = 0.0
@@ -147,9 +158,10 @@ class SceneManager:
             self.editor_camera = editor_camera()
 
         # Load first scene by default
-        self.load_scene_index(0)
+        self.cur_scene = 0
+        self.load_scene_index(self.cur_scene)
 
-        SceneManager._created = True
+        self.disable_lighting = False
 
     def get_scenes(self) -> dict[str, str]:
         """Returns dict of scene_name -> file_path"""
@@ -220,7 +232,6 @@ class SceneManager:
         """
             Returns dict of material_name -> Material
         """
-        materials = {}
         if not self.compiled:
             for dirpath, _, filenames in os.walk("assets/"):
                 for filename in filenames:
@@ -245,7 +256,7 @@ class SceneManager:
                                 img = image.open(texture_path)
                                 img = img.transpose(image.FLIP_TOP_BOTTOM)
 
-                            materials[name] = Material(shader, img.tobytes() if img else None, img.size if img else None, properties)
+                            Material(name, shader, img.tobytes() if img else None, img.size if img else None, properties)
                                 
         else:
             for file in self.pack.files:
@@ -265,11 +276,9 @@ class SceneManager:
                         if texture_path:
                             img = image.open(self.pack.get_io(texture_path))
                         
-                        materials[name] = Material(shader, img.tobytes() if img else None, img.size if img else None, properties)
+                        Material(name, shader, img.tobytes() if img else None, img.size if img else None, properties)
                     else:
-                        Logger("CORE").log_warning(f"Material {name} references unknown shader: {shader_name}.")             
-        
-        return materials        
+                        Logger("CORE").log_warning(f"Material {name} references unknown shader: {shader_name}.") 
 
     def _instantiate_scene_objects(self, scene_data: dict) -> list[Object]:
         scene_objects = []
@@ -289,7 +298,7 @@ class SceneManager:
                 vars_data: dict = comp_data.get("vars", {})
 
                 if issubclass(cls, Behavior):
-                    if not "init_method" in comp_data.keys():
+                    if cls.init_method is None:
                         behavior = cls(game_object)
                         for var_name, value in vars_data.items():
                             setattr(behavior, var_name, value)
@@ -299,8 +308,7 @@ class SceneManager:
                         if not self.active_camera and isinstance(behavior, Camera) and behavior.enabled:
                             self.active_camera = behavior
                     else:
-                        init_method = getattr(cls, comp_data["init_method"])
-                        behavior = init_method(*vars_data.values(), game_object)
+                        behavior = cls.init_method(*vars_data, game_object)
 
                         behavior.enabled = comp_data.get("active", True)
                         scripts.append(behavior)
@@ -345,7 +353,6 @@ class SceneManager:
             scene_data = self.pack.get_as_json_dict(scene_path)
 
         self.game_objects = self._instantiate_scene_objects(scene_data)
-        self.game_objects.reverse()
         Logger("SCENE MANAGEMENT").log_debug(f"Loaded gameobjects for scene {scene_info.scene_name}|{scene_info.scene_index}")
 
         # Call load callbacks
@@ -365,29 +372,24 @@ class SceneManager:
         
         return objects
 
-    def get_by_hierarchy(self) -> dict[Object, dict]:
-        hierarchy = {None: {}}
+    def get_hierarchy(self):
+        tree = {}
 
-        def place_in_tree(obj: Object):
-            # Build path to root
-            path = []
-            current = obj
-            while current.transform.parent is not None:
-                current = current.transform.parent.gameobject
-                path.append(current)
+        # find roots first
+        roots = [obj for obj in self.game_objects if obj.transform.parent is None]
 
-            # Traverse/create tree
-            cur_place = hierarchy[None]
-            for ancestor in reversed(path):
-                cur_place = cur_place.setdefault(ancestor, {})
+        def build(node):
+            children = {}
+            for obj in self.game_objects:
+                if obj.transform.parent and obj.transform.parent.gameobject is node:
+                    children[obj] = build(obj)
+            return children
 
-            # Insert object
-            cur_place[obj] = {}
+        for root in roots:
+            tree[root] = build(root)
 
-        for obj in self.game_objects:
-            place_in_tree(obj)
+        return {None: tree}
 
-        return hierarchy
 
     def update_scene(self):
         time = glfw.get_time()
@@ -405,10 +407,14 @@ class SceneManager:
             width, height = glfw.get_window_size(glfw.get_current_context())
             proj = glm.perspective(glm.radians(60), width/height, 0.01, 1000)
 
+            view_pos = self.active_camera.gameobject.transform.pos
+
         elif not self.editor:
             view = glm.lookAt(glm.vec3(0, 0, 0), glm.vec3(0, 0, 5), glm.vec3(0, 1, 0))
             width, height = glfw.get_window_size(glfw.get_current_context())
             proj = glm.perspective(glm.radians(60), width/height, 0.01, 1000)
+            
+            view_pos = glm.vec3(0, 0, 0)
         
         else:
             if Input().get_key_down(KeyCodes.k_Z):
@@ -419,6 +425,8 @@ class SceneManager:
 
             view = self.editor_camera.get_view_matrix()
             proj = self.editor_camera.get_projection_matrix()
+            
+            view_pos = self.editor_camera.position
 
         pointlights = []
         spotlights = []
@@ -434,6 +442,10 @@ class SceneManager:
             shader.set_point_lights(pointlights)
             shader.set_spot_lights(spotlights)
 
+            shader.set_vec3("uViewPos", view_pos)
+
+            shader.set_bool("uDisableLighting", self.disable_lighting)
+
         for obj in self.game_objects:
             obj.update(dt, view, proj)
 
@@ -441,3 +453,73 @@ class SceneManager:
             for obj in self.game_objects:
                 obj.fixed_update()
             self.accumulator -= 1/50
+
+    def save(self):
+        scene_key = list(self.scenes.keys())[self.cur_scene]
+        scene_path = self.scenes[scene_key]
+
+        hierarchy: dict[Object, dict] = self.get_hierarchy()[None]
+
+        cur_tree = []
+        
+        # Serialize EditorField data
+        def json_serialize(component: Behavior, variable: str):
+            field = getattr(component, variable)
+            if isinstance(field, (str, int, list, float, bool, dict)):
+                return field
+            if check_iterable(field):
+                return list(field)
+
+        # Turn an object into a JSON dictionary
+        def serialize_object(obj: Object, children: dict[Object, dict]):
+            base = {
+                "name": obj.name,
+
+                "pos": obj.transform.localpos.to_list(),
+                "rot": obj.transform.localrot.to_list(),
+                "scale": obj.transform.scale.to_list(),
+
+                "material": None,
+                "components": [],
+
+                "children": []
+            }
+
+            mat_idx = list(self.materials.values()).index(obj.mat)
+            material = list(self.materials.keys())[mat_idx]
+            base["material"] = material
+
+            for component in obj.components:
+                if component.init_method is None:
+                    base["components"].append({
+                        "module": type(component).__module__,
+                        "class": type(component).__name__,
+                        "vars": {}
+                    })
+                    for var, field in vars(type(component)).items():
+                        if isinstance(field, EditorField):
+                            base["components"][-1]["vars"][var] = json_serialize(component, var)
+                else:
+                    base["components"].append({
+                        "module": type(component).__module__,
+                        "class": type(component).__name__,
+                        "vars": [
+                            *component.init_vars
+                        ]
+                    })
+
+            if children != {}:
+                for child, children in children.items():
+                    object_dict = serialize_object(child, children)
+                    base["children"].append(object_dict)
+                    
+            return base
+            
+        for obj, children in hierarchy.items():
+            cur_tree.append(serialize_object(obj, children))
+
+        with open(scene_path, "w") as scene_file:
+            json.dump({
+                "scene_index": self.cur_scene,
+                "objects": cur_tree
+            }, scene_file)

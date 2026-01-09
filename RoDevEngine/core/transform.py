@@ -8,7 +8,6 @@ class Transform:
                        parent = None):
         self.__pos = pos
 
-        # Create quaternion from Euler angles
         self.__rot = rot
 
         self.scale = scale
@@ -106,9 +105,6 @@ class Transform:
     def rotate_by_degrees(self, dx: float = 0, dy: float = 0, dz: float = 0, degrees: glm.vec3 = glm.vec3(0)):
         if degrees == glm.vec3(0):
             degrees = glm.vec3(dx, dy, dz)
-            
-        radians = glm.radians(degrees)
-        quat = glm.quat(radians)
 
-        self.__rot = quat * self.__rot
+        self.__rot = degrees + self.__rot
 
