@@ -117,7 +117,7 @@ class Window:
                             for window in windows:
                                 if imgui.menu_item(window.__name__, window.keybind)[1]:
                                     if issubclass(window, editor_windows.EditorWindow):
-                                        self.open_windows.append(window())
+                                        self.open_editor_window(window())
                                     else:
                                         window.on_click()
 

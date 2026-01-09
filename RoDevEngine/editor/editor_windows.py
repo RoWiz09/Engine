@@ -30,7 +30,9 @@ class EditorWindow:
             menu_registry[cls.menu].append(cls)
 
     def render(self) -> bool:
-        window = imgui.begin(type(self).__name__, True)
+        imgui.push_style_var(imgui.STYLE_WINDOW_PADDING, (5, 5))
+        window = imgui.begin(type(self).__name__, True, flags=imgui.WINDOW_ALWAYS_AUTO_RESIZE|imgui.WINDOW_NO_RESIZE)
+        imgui.pop_style_var(imgui.STYLE_WINDOW_PADDING)
         if not window.opened:
             imgui.end()
             return None
@@ -40,6 +42,7 @@ class EditorWindow:
 class Hierarchy(EditorWindow):
     menu = "Scene"
     keybind = "Ctrl+H"
+    allow_multiple = False
 
     def render(self) -> Object | None:
         window = super().render()
@@ -50,7 +53,7 @@ class Hierarchy(EditorWindow):
         
         from ..core.window import Window
         with window:
-            width = imgui.get_window_width() - 15
+            width = 200
 
             if imgui.button("Create New Object", width):
                 SceneManager().game_objects.append(Object("New Gameobject", SceneManager().materials["base_mat"]))
@@ -72,7 +75,7 @@ class Hierarchy(EditorWindow):
 
                         imgui.set_cursor_pos_x(20 * (len(steps) + 1) + 8)
                         imgui.push_id(str(obj_id))
-                        if imgui.button(child_obj.name, width - 20 * (len(steps) + 1)):
+                        if imgui.button(child_obj.name, width - 20 * (len(steps) + 1) - 5):
                             inspector = Inspector()
                             inspector.object = child_obj
                             Window().open_editor_window(inspector)
