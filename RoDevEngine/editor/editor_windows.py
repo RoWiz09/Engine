@@ -111,8 +111,6 @@ class Inspector(EditorWindow):
             Logger("EDITOR").log_error("An inspector is missing an object! How did that happen?!")
             return True
         
-        imgui.set_next_window_size(300, 400)
-        
         window = super().render()
         if not window:
             return True
@@ -142,20 +140,28 @@ class Inspector(EditorWindow):
 
             var_id = 0
             component_ids = {}
-            for component in self.object.components:
+            for component in self.object.components.copy():
                 imgui.separator()
                 
                 if not type(component) in component_ids.keys():
                     component_ids[type(component)] = 1
 
-                imgui.begin_child(type(component).__name__ + " " + str(component_ids[type(component)]), width = 280, height = 100, border = True)
+                imgui.begin_child(type(component).__name__ + " " + str(component_ids[type(component)]), width = 280, height = 100, border = True, flags=imgui.WINDOW_NO_SCROLLBAR)
                 component_ids[type(component)] += 1
 
                 imgui.text(type(component).__name__)
                 imgui.same_line()
-                imgui.set_cursor_pos_x(280 - 40)
+                imgui.set_cursor_pos_x(280 - 80)
                 imgui.push_id(str(var_id))
-                changed, val = imgui.checkbox("", component.enabled)
+                if imgui.button("Options", 80):
+                    imgui.open_popup("CompOpt")
+
+                with imgui.begin_popup("CompOpt") as comp_popup:
+                    if comp_popup:
+                        component.enabled = imgui.checkbox("Enabled", component.enabled)[1]
+                        if imgui.button("Remove", 100):
+                            self.object.components.remove(component)
+
                 imgui.pop_id()
                 var_id += 1
                 if changed:

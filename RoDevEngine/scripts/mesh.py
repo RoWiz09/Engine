@@ -13,7 +13,8 @@ import hashlib
 import os
 
 class Mesh(Behavior):
-    category = "General"
+    category = "Rendering"
+
     # Class-level registry for shared mesh data
     _mesh_registry = {}
 
@@ -164,6 +165,8 @@ class Mesh(Behavior):
                     cur_mesh._create_or_get_buffers()
 
                     submeshes.append(cur_mesh)
+
+                    break
                 
                 positions.clear()
                 normals.clear()

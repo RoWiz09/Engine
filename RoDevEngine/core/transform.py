@@ -18,7 +18,7 @@ class Transform:
     @property
     def pos(self):
         if self.__parent:
-            return self.__pos + self.__parent.pos
+            return self.__parent.pos + (self.__parent.rot * self.localpos)
 
         return self.__pos 
     

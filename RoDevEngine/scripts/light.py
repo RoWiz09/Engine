@@ -4,12 +4,13 @@ from enum import Enum
 
 class Pointlight(Behavior):
     category = "Rendering"
+
     ambient = EditorField("vec3", vec3(0.05, 0.05, 0.05))
     diffuse = EditorField("vec3", vec3(1.0, 1.0, 1.0))
     specular = EditorField("vec3", vec3(1.0, 1.0, 1.0))
 
     intensity = EditorField("float", 1)
-    color = EditorField("vec3", vec3())
+    color = EditorField("vec3", vec3(255, 255, 255))
 
     range = EditorField("float", 1)
 
@@ -21,12 +22,14 @@ class Pointlight(Behavior):
         super().__init__(gameobject)  
 
 class Spotlight(Behavior):
+    category = "Rendering"
+    
     ambient = EditorField("vec3", vec3(0.05, 0.05, 0.05))
     diffuse = EditorField("vec3", vec3(1.0, 1.0, 1.0))
     specular = EditorField("vec3", vec3(1.0, 1.0, 1.0))
 
     intensity = EditorField("float", 1)
-    color = EditorField("vec3", vec3(1, 1, 1))
+    color = EditorField("vec3", vec3(255, 255, 255))
 
     direction = EditorField("vec3", vec3())
     range = EditorField("float", 1)
