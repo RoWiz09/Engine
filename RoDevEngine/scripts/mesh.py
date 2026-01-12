@@ -1,4 +1,4 @@
-from .behavior import Behavior, EditorField, init_method, register_editor_button
+from .behavior import Behavior, EditorField, InitMethod, register_editor_button
 from ..core.logger import Logger
 
 from ..core.packer import Pack
@@ -21,13 +21,14 @@ class Mesh(Behavior):
     mesh_path = EditorField('str', "")
     mesh_name = EditorField('str', "")
 
+    run_in_editor = True
+
     def __init__(self, gameobject):
         super().__init__(gameobject)
-        self._run_in_editor = True
 
         self.submeshes: list[Submesh] = []
 
-    @init_method
+    @InitMethod
     def create_from_obj(cls, file_path: str, file_name: str, game_object: Object):
         submeshes = []
         cur_mesh = None
@@ -40,6 +41,10 @@ class Mesh(Behavior):
         indices = []
 
         vertex_map = {}  # (v, vt, vn) -> index
+
+        pos_offset = 0
+        nor_offset = 0
+        tex_offset = 0
 
         lines = []
         if not "compiled" in os.environ.keys():
@@ -59,6 +64,10 @@ class Mesh(Behavior):
 
                     submeshes.append(cur_mesh)
                 
+                pos_offset = len(positions)
+                nor_offset = len(normals)
+                tex_offset = len(tex_coords)
+
                 positions.clear()
                 normals.clear()
                 tex_coords.clear()
@@ -87,9 +96,9 @@ class Mesh(Behavior):
                     for vert in (face[0], face[i], face[i + 1]):
 
                         parts = vert.split("/")
-                        v = int(parts[0]) - 1
-                        vt = int(parts[1]) - 1 if len(parts) > 1 and parts[1] else None
-                        vn = int(parts[2]) - 1 if len(parts) > 2 and parts[2] else None
+                        v = int(parts[0]) - 1 - pos_offset
+                        vt = int(parts[1]) - 1 - tex_offset if len(parts) > 1 and parts[1] else None
+                        vn = int(parts[2]) - 1 - nor_offset if len(parts) > 2 and parts[2] else None
 
                         key = (v, vt, vn)
                         if key not in vertex_map:
@@ -142,13 +151,16 @@ class Mesh(Behavior):
         normals = []
         tex_coords = []
 
-        vertices = []
+        vertices = []   # interleaved vertex data
         indices = []
 
-        vertex_map = {}  # v, vn, vt
+        vertex_map = {}  # (v, vt, vn) -> index
+
+        pos_offset = 0
+        nor_offset = 0
+        tex_offset = 0
 
         lines = []
-
         if not "compiled" in os.environ.keys():
             with open(os.path.join(*file_path.split("."), file_name)) as file:
                 lines = file.readlines()
@@ -165,9 +177,11 @@ class Mesh(Behavior):
                     cur_mesh._create_or_get_buffers()
 
                     submeshes.append(cur_mesh)
-
-                    break
                 
+                pos_offset = len(positions)
+                nor_offset = len(normals)
+                tex_offset = len(tex_coords)
+
                 positions.clear()
                 normals.clear()
                 tex_coords.clear()
@@ -196,9 +210,9 @@ class Mesh(Behavior):
                     for vert in (face[0], face[i], face[i + 1]):
 
                         parts = vert.split("/")
-                        v = int(parts[0]) - 1
-                        vt = int(parts[1]) - 1 if len(parts) > 1 and parts[1] else None
-                        vn = int(parts[2]) - 1 if len(parts) > 2 and parts[2] else None
+                        v = int(parts[0]) - 1 - pos_offset
+                        vt = int(parts[1]) - 1 - tex_offset if len(parts) > 1 and parts[1] else None
+                        vn = int(parts[2]) - 1 - nor_offset if len(parts) > 2 and parts[2] else None
 
                         key = (v, vt, vn)
                         if key not in vertex_map:

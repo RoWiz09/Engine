@@ -20,6 +20,9 @@ import os, json, importlib, glfw, sys
 import numpy as np
 import inspect
 
+# Import to register scripts
+from ..scripts.collider import *
+
 @dataclass(frozen=True)
 class SceneInfo:
     scene_name: str
@@ -415,6 +418,10 @@ class SceneManager:
             proj = glm.perspective(glm.radians(60), width/height, 0.01, 1000)
             
             view_pos = glm.vec3(0, 0, 0)
+
+        for _, components in Behavior.component_category_registry.items():
+            for component in components:
+                component.on_frame_start()
         
         else:
             if Input().get_key_down(KeyCodes.k_Z):
@@ -453,6 +460,10 @@ class SceneManager:
             for obj in self.game_objects:
                 obj.fixed_update()
             self.accumulator -= 1/50
+
+        for _, components in Behavior.component_category_registry.items():
+            for component in components:
+                component.on_frame_end()
 
     def save(self):
         scene_key = list(self.scenes.keys())[self.cur_scene]

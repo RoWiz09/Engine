@@ -164,9 +164,7 @@ class Inspector(EditorWindow):
 
                 imgui.pop_id()
                 var_id += 1
-                if changed:
-                    component.enabled = val
-
+                
                 # --- Iterate over EditorFields on the class ---
                 for var_name, field in vars(type(component)).items():
                     imgui.push_id(str(var_id))

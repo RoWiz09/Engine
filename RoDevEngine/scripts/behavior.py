@@ -7,7 +7,7 @@ def register_editor_button(func):
     Behavior.editor_button_registry.append(func)
     return func
 
-class init_method:
+class InitMethod:
     """
         Sets the decorated method to be the method used when initalizing the class. \n
         Automatically passes through the class type to create instances with.
@@ -37,10 +37,20 @@ class init_method:
         return wrapper
 
 class Behavior:
+    """
+    The basic behavior class all scripts should inherit from. Exposes methods for:\n
+    - __init__(self, gameobject): basic script initalization
+    - on_frame_start/end: Class methods called upon the start or end of a frame respectively
+    - on_collision (start and end): Methods called upon collisions
+    - update/fixed_update: Methods called every frame/~50th of a second
+    - on_scene_load/unload: Methods called upon the loading/unloading of a scene.
+    """
     component_category_registry: dict[str, list[Behavior]] = {}
     category = "General"
     
     editor_button_registry = []
+
+    run_in_editor = False
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -57,10 +67,8 @@ class Behavior:
         from RoDevEngine.object import Object
         self.__gameobject: Object = gameobject
         self.__enabled = True
-
-        self._run_in_editor = False
     
-    init_method = None
+    init_method: InitMethod = None
     init_vars = []
 
     @property
@@ -82,6 +90,20 @@ class Behavior:
     def window(self):
         from ..core.window import Window
         return Window()
+    
+    @classmethod
+    def on_frame_start(cls):
+        """
+        Called upon the start of a frame. This is a class method.
+        """
+        pass
+
+    @classmethod
+    def on_frame_end(cls):
+        """
+        Called upon the end of a frame. This is a class method.
+        """
+        pass
     
     def update(self, dt:float):
         """
@@ -110,6 +132,33 @@ class Behavior:
             Called when the scene unloads!
             Args:
                 scene_info (SceneInfo): The SceneInfo object for the unloaded scene
+        """
+        pass
+
+    def on_collision_start(self, other):
+        """
+        Called upon a collision 'starting', or the first collision between two gameobjects.
+        
+        :param other: The colliding gameobject
+        :type other: Object
+        """
+        pass
+
+    def on_collision(self, other):
+        """
+        Continuously called while there is a collision between two gameobjects.
+        
+        :param other: The colliding gameobject
+        :type other: Object
+        """
+        pass
+
+    def on_collision_exit(self, other):
+        """
+        Called when there is no longer a collision between two gameobjects.
+        
+        :param other: The gamobject collided with
+        :type other: Object
         """
         pass
 

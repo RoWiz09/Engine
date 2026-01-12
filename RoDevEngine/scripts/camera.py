@@ -10,8 +10,6 @@ class Camera(Behavior):
     fov = EditorField("float", 60.0)
     def __init__(self, gameobject):
         super().__init__(gameobject)
-
-        self._run_in_editor = True
     
     def on_scene_load(self, scene_info):
         if not isinstance(self.rotation_mod, glm.quat):

@@ -47,7 +47,7 @@ class Object:
                 if not component.enabled:
                     continue
 
-                if sys.argv[-1] == "--editor" and not component._run_in_editor:
+                if sys.argv[-1] == "--editor" and not component.run_in_editor:
                     continue
 
                 component.update(dt)
@@ -65,6 +65,14 @@ class Object:
         for component in self.components:
             if isinstance(component, component_class) and component.enabled:
                 return component
+            
+    def get_components(self, component_class):
+        out = []
+        for component in self.components:
+            if isinstance(component, component_class) and component.enabled:
+                out.append(component)
+
+        return out
 
     def add_components(self, *components):
         for component in components:
