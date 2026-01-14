@@ -79,7 +79,7 @@ class CubeCollider(Behavior):
                     if in_this_frame and not in_last_frame:
                         for component in self.gameobject.components:
                             component.on_collision_start(collider.gameobject)
-                    elif in_this_frame and in_last_frame:
+                    elif in_this_frame:
                         for component in self.gameobject.components:
                             component.on_collision(collider.gameobject)
                     elif not in_this_frame and in_last_frame:
