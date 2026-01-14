@@ -7,7 +7,7 @@ settings = RoDevEngine.core.settings.Settings()
 win_width = int(settings.get_setting("window_width", 800))
 win_height = int(settings.get_setting("window_height", 600))
 
-logger.configure_loggers(log_level = logger.LoggingLevels.WARNING, log_to_console = True)
+RoDevEngine.set_logging_level(RoDevEngine.LoggingLevels.DEBUG)
 window = RoDevEngine.init(window_width=win_width, window_height=win_height)
 
 while not window.should_close():

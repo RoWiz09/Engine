@@ -47,7 +47,7 @@ class SceneManager:
     def __init__(self):
         if SceneManager._created:
             return
-        
+
         self.materials = {}
         SceneManager._created = True
         
@@ -55,7 +55,18 @@ class SceneManager:
         if self.compiled:
             self.pack = Pack()
 
-        self.scenes = self.get_scenes()
+        def get_index(scene_data):
+            scene_name, scene_path = scene_data
+            if not self.compiled:
+                with open(scene_path, "r") as scene:
+                    data = json.load(scene)
+                    return data["scene_index"]
+                
+            else:
+                data = Pack().get_as_json_dict(scene_path)
+                return data["scene_index"]
+
+        self.scenes = dict(sorted(self.get_scenes().items(), key=get_index))
         self.shaders = self.get_shaders()
         self.get_materials(self.shaders)
         self.game_objects: list[Object] = []
@@ -161,8 +172,7 @@ class SceneManager:
             self.editor_camera = editor_camera()
 
         # Load first scene by default
-        self.cur_scene = 0
-        self.load_scene_index(self.cur_scene)
+        self.load_scene_index(0)
 
         self.disable_lighting = False
 
@@ -296,30 +306,34 @@ class SceneManager:
             scripts = []
 
             for comp_data in obj_data.get("components", []):
-                module = importlib.import_module(comp_data["module"])
-                cls = getattr(module, comp_data["class"])
-                vars_data: dict = comp_data.get("vars", {})
+                try:
+                    module = importlib.import_module(comp_data["module"])
+                    cls = getattr(module, comp_data["class"])
+                    vars_data: dict = comp_data.get("vars", {})
 
-                if issubclass(cls, Behavior):
-                    if cls.init_method is None:
-                        behavior = cls(game_object)
-                        for var_name, value in vars_data.items():
-                            setattr(behavior, var_name, value)
-                        behavior.enabled = comp_data.get("active", True)
-                        scripts.append(behavior)
+                    if issubclass(cls, Behavior):
+                        if cls.init_method is None:
+                            behavior = cls(game_object)
+                            for var_name, value in vars_data.items():
+                                setattr(behavior, var_name, value)
+                            behavior.enabled = comp_data.get("active", True)
+                            scripts.append(behavior)
 
-                        if not self.active_camera and isinstance(behavior, Camera) and behavior.enabled:
-                            self.active_camera = behavior
+                            if not self.active_camera and isinstance(behavior, Camera) and behavior.enabled:
+                                self.active_camera = behavior
+                        else:
+                            behavior = cls.init_method(*vars_data, game_object)
+
+                            behavior.enabled = comp_data.get("active", True)
+                            scripts.append(behavior)
+                            
                     else:
-                        behavior = cls.init_method(*vars_data, game_object)
+                        Logger("CORE").log_warning(
+                            f"Script {cls.__name__} is not a subclass of Behavior and cannot be applied to {object_name}!"
+                        )   
 
-                        behavior.enabled = comp_data.get("active", True)
-                        scripts.append(behavior)
-                        
-                else:
-                    Logger("CORE").log_warning(
-                        f"Script {cls.__name__} is not a subclass of Behavior and cannot be applied to {object_name}!"
-                    )            
+                except:
+                    continue
 
             game_object.add_components(*scripts)
 
@@ -340,6 +354,8 @@ class SceneManager:
     def load_scene_index(self, scene_index: int):
         scene_name = list(self.scenes.keys())[scene_index]
         scene_path = self.scenes[scene_name]
+
+        self.cur_scene = scene_name
 
         # Call unload callbacks on current scene before switching
         scene_info = SceneInfo(scene_name, scene_index)
@@ -400,6 +416,10 @@ class SceneManager:
         self.last_time = time
         self.accumulator += dt
 
+        for _, components in Behavior.component_category_registry.items():
+            for component in components:
+                component.on_frame_start()
+
         if self.active_camera and not self.editor:
             camera = self.active_camera
             view = glm.lookAt(
@@ -419,10 +439,6 @@ class SceneManager:
             
             view_pos = glm.vec3(0, 0, 0)
 
-        for _, components in Behavior.component_category_registry.items():
-            for component in components:
-                component.on_frame_start()
-        
         else:
             if Input().get_key_down(KeyCodes.k_Z):
                 self.editor_camera_active = not self.editor_camera_active
@@ -466,8 +482,11 @@ class SceneManager:
                 component.on_frame_end()
 
     def save(self):
-        scene_key = list(self.scenes.keys())[self.cur_scene]
-        scene_path = self.scenes[scene_key]
+        if not self.editor:
+            Logger("EDITOR").log_warning("You can't save scenes when not in the editor!")
+            return
+        
+        scene_path = self.scenes[self.cur_scene]
 
         hierarchy: dict[Object, dict] = self.get_hierarchy()[None]
 
@@ -531,6 +550,20 @@ class SceneManager:
 
         with open(scene_path, "w") as scene_file:
             json.dump({
-                "scene_index": self.cur_scene,
+                "scene_index": list(self.scenes.keys()).index(self.cur_scene),
                 "objects": cur_tree
             }, scene_file)
+
+    def save_scene_indices(self):
+        if not self.editor:
+            Logger("EDITOR").log_warning("You can't save scene indices when not in the editor!")
+            return
+
+        for idx, scene in enumerate(self.scenes.values()):
+            with open(scene, "r+") as scenefile:
+                data = json.load(scenefile)
+                data["scene_index"] = idx
+
+                scenefile.seek(0)
+                json.dump(data, scenefile)
+            

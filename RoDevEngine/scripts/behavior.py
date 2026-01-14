@@ -162,6 +162,33 @@ class Behavior:
         """
         pass
 
+    def on_trigger_start(self, other):
+        """
+        Called upon a trigger 'starting', or the first trigger collision between two gameobjects.
+        
+        :param other: The colliding gameobject
+        :type other: Object
+        """
+        pass
+
+    def on_trigger(self, other):
+        """
+        Continuously called while there is a trigger collision between two gameobjects.
+        
+        :param other: The colliding gameobject
+        :type other: Object
+        """
+        pass
+
+    def on_trigger_exit(self, other):
+        """
+        Called when there is no longer a trigger collision between two gameobjects.
+        
+        :param other: The gamobject collided with
+        :type other: Object
+        """
+        pass
+
 class EditorField:
     def __init__(self, field_type, default=None):
         self.type = field_type

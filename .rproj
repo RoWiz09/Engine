@@ -1,4 +1,4 @@
-name="testproj",
+name=testproj,
 dlc = {
     dlc0: testproj
 }

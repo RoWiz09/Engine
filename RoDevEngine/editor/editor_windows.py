@@ -5,10 +5,14 @@ from ..core.scene_manager import SceneManager
 from ..object import Object
 from ..scripts.behavior import Behavior, EditorField
 
+from ..core import transform
+
 from ..core.logger import Logger
 from pyglm import glm
 
 import imgui
+import json
+import os
 
 menu_registry: dict[str, list[EditorWindow]] = {}
 def register_menu(name: str):
@@ -22,7 +26,7 @@ register_menu("Other")
 
 class EditorWindow:
     menu = None
-    allow_multiple = True
+    allow_multiple = False
     keybind = ""
 
     def __init_subclass__(cls: object):
@@ -56,15 +60,19 @@ class Hierarchy(EditorWindow):
             width = 200
 
             if imgui.button("Create New Object", width):
-                SceneManager().game_objects.append(Object("New Gameobject", SceneManager().materials["base_mat"]))
+                SceneManager().game_objects.append(Object("New Gameobject", SceneManager().materials["base_mat"], transform.Transform()))
 
             hierarchy = SceneManager().get_hierarchy()[None]
             
             for obj, children in hierarchy.items():
+                imgui.push_id(str(obj_id))
                 if imgui.button(obj.name, width):
                     inspector = Inspector()
                     inspector.object = obj
                     Window().open_editor_window(inspector)
+                imgui.pop_id()
+
+                obj_id += 1
 
                 steps = {}
                 child_idx = 0
@@ -97,7 +105,6 @@ class Hierarchy(EditorWindow):
                         else:
                             cur_children, child_idx = list(steps.values())[-1]
                             steps = dict(list(steps.items())[:-1])
-
         return False
 
 class Inspector(EditorWindow):
@@ -237,6 +244,110 @@ class Gizmos(EditorWindow):
             changed, state = imgui.checkbox("Use Lights", not SceneManager().disable_lighting)
             if changed:
                 SceneManager().disable_lighting = not state
+
+class Scenes(EditorWindow):
+    menu = "File"
+
+    def __init__(self):
+        self.selected_scene = None
+        self.new_scene_name = ""
+        super().__init__()
+
+    def render(self):
+        window = super().render()
+
+        if not window:
+            return True
+
+        with window:
+            if imgui.button("Create New Scene", 300):
+                imgui.open_popup("SceneMenu")
+            
+            with imgui.begin_popup("SceneMenu") as popup:
+                if popup:
+                    changed, value = imgui.input_text_with_hint("", "Scene Name:", self.new_scene_name)
+                    if changed:
+                        self.new_scene_name = value
+
+                    if imgui.button("Create", 200):
+                        path = os.path.join("assets", os.environ["project"], self.new_scene_name + ".rscene")
+                        with open(path, "w") as new_scene_file:
+                            index = len(SceneManager().scenes)
+                            data = {
+                                "scene_index": index,
+                                "objects": []
+                            }
+                            
+                            json.dump(data, new_scene_file)
+                        
+                        SceneManager().scenes[self.new_scene_name] = path
+                        imgui.close_current_popup()
+                        self.new_scene_name = ""
+
+            scenes = list(SceneManager().scenes.keys())
+
+            with imgui.begin_child("scenes", 300, 100, border=True, flags=imgui.WINDOW_NO_SCROLLBAR):
+                for idx, scene in enumerate(scenes):
+                    with imgui.begin_child(scene, 284, 40, border=True, 
+                                           flags = imgui.WINDOW_NO_SCROLLBAR 
+                                           | imgui.WINDOW_NO_SCROLL_WITH_MOUSE):
+                        imgui.text(scene)
+
+                        imgui.same_line()
+                        imgui.set_cursor_pos_x(195)
+                        if imgui.button("Options", 60):
+                            self.selected_scene = scene
+
+                        imgui.set_cursor_pos((260, 0))
+                        imgui.push_id(str(idx))
+                        if imgui.arrow_button("Decrease", imgui.DIRECTION_UP):
+                            if idx != 0:
+                                new_idx = idx - 1
+
+                                new_scenes_list = list(SceneManager().scenes.items())
+                                new_scenes_list.insert(new_idx, new_scenes_list[idx])
+                                new_scenes_list.pop(idx + 1)
+
+                                SceneManager().scenes = dict(new_scenes_list)
+                                SceneManager().save_scene_indices()
+                            
+                        imgui.set_cursor_pos((260, 20))
+                        if imgui.arrow_button("Increase", imgui.DIRECTION_DOWN):
+                            if idx != len(SceneManager().scenes) - 1:
+                                new_idx = idx + 2
+
+                                new_scenes_list = list(SceneManager().scenes.items())
+                                new_scenes_list.insert(new_idx, new_scenes_list[idx])
+                                new_scenes_list.pop(idx)
+
+                                SceneManager().scenes = dict(new_scenes_list)
+                                SceneManager().save_scene_indices()
+
+                        imgui.pop_id()
+                    
+            if self.selected_scene:
+                imgui.text("Scene ID: " + str(list(SceneManager().scenes.keys()).index(self.selected_scene)))
+                
+                imgui.same_line()
+                imgui.set_cursor_pos_x(220)
+                if imgui.button("Load", 80):
+                    SceneManager().load_scene(self.selected_scene)
+
+class Freecam(EditorWindow):
+    menu = "Other"
+
+    def render(self):
+        window = super().render()
+        if not window:
+            return True
+
+        with window:
+            changed, value = imgui.slider_float("Camera Speed", SceneManager().editor_camera.speed, 0.5, 20)
+            if changed:
+                SceneManager().editor_camera.speed = value
+            changed, value = imgui.slider_float("Camera FOV", SceneManager().editor_camera.zoom, 40, 80)
+            if changed:
+                SceneManager().editor_camera.zoom = value
 
 class MenuObject:
     menu = None

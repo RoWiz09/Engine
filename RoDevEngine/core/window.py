@@ -65,6 +65,11 @@ class Window:
         compiled = not os.path.isfile(".rproj") # If there is a .rproj file, then the project has not been built yet.
         if compiled:
             os.environ['compiled'] = ""
+        else:
+            with open(".rproj") as project_file:
+                name = project_file.readline().split("=")[1]
+                name = name[:-2]
+            os.environ["project"] = name
         self.scene_manager = SceneManager()
 
         Window._created = True

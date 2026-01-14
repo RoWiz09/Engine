@@ -9,6 +9,9 @@ from pyglm.glm import vec3
 class CubeCollider(Behavior):
     collisions_this_frame = []
     collisions_last_frame = []
+
+    triggers_this_frame = []
+    triggers_last_frame = []
     category = "Physics"
 
     scale_factor = EditorField("vec3", vec3(1))
@@ -21,6 +24,8 @@ class CubeCollider(Behavior):
         super().__init__(gameobject)
 
     def get_bounds(self) -> tuple[vec3, vec3]:
+        if not isinstance(self.scale_factor, vec3):
+            self.scale_factor = vec3(*self.scale_factor)
         center = self.gameobject.transform.pos + self.pos_offset
         half   = self.scale_factor * 0.5
 
@@ -49,6 +54,9 @@ class CubeCollider(Behavior):
         cls.collisions_last_frame = cls.collisions_this_frame.copy()
         cls.collisions_this_frame.clear()
 
+        cls.triggers_last_frame = cls.triggers_this_frame.copy()
+        cls.triggers_this_frame.clear()
+
     def update(self, dt):
         from ..core.scene_manager import SceneManager
 
@@ -57,19 +65,41 @@ class CubeCollider(Behavior):
                 continue
 
             for collider in obj.get_components(CubeCollider):
-                if not [self, collider] in CubeCollider.collisions_this_frame:
+                if not [self, collider] in CubeCollider.collisions_this_frame and not [self, collider] in CubeCollider.collisions_this_frame:
                     if self.check_collision(collider):
-                        CubeCollider.collisions_this_frame.append([self, collider])
+                        if not any([self.trigger_collider, collider.trigger_collider]):
+                            CubeCollider.collisions_this_frame.append([self, collider])
+                        else:
+                            CubeCollider.triggers_this_frame.append([self, collider])
 
-                if [self, collider] in CubeCollider.collisions_this_frame and not [self, collider] in CubeCollider.collisions_last_frame:
-                    for component in self.gameobject.components:
-                        component.on_collision_start(collider.gameobject)
-                elif [self, collider] in CubeCollider.collisions_this_frame and [self, collider] in CubeCollider.collisions_last_frame:
-                    for component in self.gameobject.components:
-                        component.on_collision(collider.gameobject)
-                elif not [self, collider] in CubeCollider.collisions_this_frame and [self, collider] in CubeCollider.collisions_last_frame:
-                    for component in self.gameobject.components:
-                        component.on_collision_exit(collider.gameobject)
+                if not any([self.trigger_collider, collider.trigger_collider]):
+                    in_this_frame = [self, collider] in CubeCollider.collisions_this_frame
+                    in_last_frame = [self, collider] in CubeCollider.collisions_last_frame
 
+                    if in_this_frame and not in_last_frame:
+                        for component in self.gameobject.components:
+                            component.on_collision_start(collider.gameobject)
+                    elif in_this_frame and in_last_frame:
+                        for component in self.gameobject.components:
+                            component.on_collision(collider.gameobject)
+                    elif not in_this_frame and in_last_frame:
+                        for component in self.gameobject.components:
+                            component.on_collision_exit(collider.gameobject)
+                            
+                else:
+                    in_this_frame = [self, collider] in CubeCollider.triggers_this_frame
+                    in_last_frame = [self, collider] in CubeCollider.triggers_last_frame
 
-        return super().update(dt)
+                    if in_this_frame and not in_last_frame:
+                        for component in self.gameobject.components:
+                            component.on_trigger_start(collider.gameobject)
+                    elif in_this_frame and in_last_frame:
+                        for component in self.gameobject.components:
+                            component.on_trigger(collider.gameobject)
+                    elif not in_this_frame and in_last_frame:
+                        for component in self.gameobject.components:
+                            component.on_trigger_exit(collider.gameobject)
+    
+    def on_collision_start(self, other):
+        print("WOW!")
+        return super().on_collision_start(other)
