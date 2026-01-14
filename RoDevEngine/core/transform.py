@@ -48,6 +48,10 @@ class Transform:
     @localrot.setter
     def localrot(self, value):
         self.__rot = value
+    
+    @property
+    def local_quatrot(self):
+        return glm.quat(glm.radians(self.__rot))
 
     @property
     def parent(self):
@@ -72,16 +76,13 @@ class Transform:
 
         return model
 
-    @overload
-    def move(self, dx:float, dy:float, dz:float): ...
 
-    @overload
-    def move(self, delta: glm.vec3): ...
+    def move(self, dx: float = 0, dy: float = 0, dz: float = 0):
+        delta = glm.vec3(dx, dy, dz)
 
-    def move(self, dx: float = 0, dy: float = 0, dz: float = 0, delta: glm.vec3 = glm.vec3(0)):
-        if delta == glm.vec3(0):
-            delta = glm.vec3(dx, dy, dz)
+        self.__pos += delta
 
+    def move_by_vec3(self, delta: glm.vec3): 
         self.__pos += delta
 
     @overload
@@ -106,5 +107,5 @@ class Transform:
         if degrees == glm.vec3(0):
             degrees = glm.vec3(dx, dy, dz)
 
-        self.__rot = degrees + self.__rot
+        self.__rot += degrees
 

@@ -94,14 +94,14 @@ class Behavior:
     @classmethod
     def on_frame_start(cls):
         """
-        Called upon the start of a frame. This is a class method.
+        Called upon the start of a frame. This is a class method, and as such, will only be called once per class.
         """
         pass
 
     @classmethod
     def on_frame_end(cls):
         """
-        Called upon the end of a frame. This is a class method.
+        Called upon the end of a frame. This is a class method, and as such, will only be called once per class.
         """
         pass
     

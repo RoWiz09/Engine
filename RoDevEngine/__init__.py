@@ -1,5 +1,7 @@
 from .core.logger import LoggingLevels
 
+from .scripts.rigidbody import Rigidbody
+
 def init(window_width = 800, window_height = 600, window_name = "Test"):
     from .core.window import Window
     return Window(window_width, window_height, window_name)
@@ -18,8 +20,8 @@ def set_logging_level(logging_level: LoggingLevels):
     :param logging_level: Logging level
     :type logging_level: LoggingLevels
     """
-    from .core.logger import configure_loggers
-    configure_loggers(logging_level = logging_level)
+    from .core import logger
+    logger.configure_loggers(log_level = logging_level)
 
 def get_settings():
     """

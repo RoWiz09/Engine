@@ -7,6 +7,9 @@ from .core.transform import Transform
 from .scripts.behavior import Behavior
 import sys
 
+from typing import TypeVar
+T = TypeVar("T")
+
 class Object:
     @overload
     def __init__(self, name, material:Material): ...
@@ -61,12 +64,12 @@ class Object:
             if component.enabled:
                 component.fixed_update()
 
-    def get_component(self, component_class):
+    def get_component(self, component_class: T) -> T:
         for component in self.components:
             if isinstance(component, component_class) and component.enabled:
                 return component
             
-    def get_components(self, component_class):
+    def get_components(self, component_class: T) -> list[T]:
         out = []
         for component in self.components:
             if isinstance(component, component_class) and component.enabled:
