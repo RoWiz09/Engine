@@ -14,7 +14,9 @@ in vec2 vTexCoord;
 
 out vec4 FragColor;
 
+// ===============================
 // Point Light
+// ===============================
 struct PointLight {
     vec4 position;
     vec4 ambient;
@@ -30,12 +32,14 @@ layout(std140) uniform PointLightBlock {
 
 uniform int uNumPointLights;
 
+// ===============================
 // Spot Light
+// ===============================
 struct SpotLight {
     vec4 position;
-    vec4 direction;
-    vec4 angles;
-    vec4 color; 
+    vec4 direction;   // MUST be light -> forward direction
+    vec4 angles;      // x = innerCutoff (cos), y = outerCutoff (cos)
+    vec4 color;
     vec4 ambient;
     vec4 diffuse;
     vec4 specular;
@@ -48,68 +52,95 @@ layout(std140) uniform SpotLightBlock {
 
 uniform int uNumSpotLights;
 
+// ===============================
 // Point Light Calculation
+// ===============================
 vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
 {
     vec3 L = normalize(light.position.xyz - fragPos);
     float distance = length(light.position.xyz - fragPos);
 
-    if(distance > light.attenuation.w)
+    if (distance > light.attenuation.w)
         return vec3(0.0);
 
     float diff = max(dot(normal, L), 0.0);
     vec3 H = normalize(L + viewDir);
     float spec = pow(max(dot(normal, H), 0.0), 32.0);
 
-    float atten = 1.0 / (light.attenuation.x + light.attenuation.y*distance + light.attenuation.z*distance*distance);
+    float atten = 1.0 / (
+        light.attenuation.x +
+        light.attenuation.y * distance +
+        light.attenuation.z * distance * distance
+    );
+
     float rangeFade = 1.0 - clamp(distance / light.attenuation.w, 0.0, 1.0);
     atten *= rangeFade * rangeFade;
 
-    vec3 color = light.color.rgb / vec3(255.0, 255.0, 255.0);
+    vec3 color = light.color.rgb / vec3(255.0);
 
-    vec3 ambient  = light.ambient.rgb * color;
+    vec3 ambient  = light.ambient.rgb  * color;
     vec3 diffuse  = light.diffuse.rgb  * diff * color;
     vec3 specular = light.specular.rgb * spec * color;
 
-    return (ambient + (diffuse + specular)) * atten * light.position.w;
+    return (ambient + diffuse + specular) * atten * light.position.w;
 }
 
-// Spot Light Calculation
+// ===============================
+// Spot Light Calculation (FIXED)
+// ===============================
 vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
 {
+    // Vector from fragment -> light (used consistently everywhere)
     vec3 L = normalize(light.position.xyz - fragPos);
+
+    // Spotlight cone test
+    // light.direction points FORWARD from the light
+    // L points TOWARD the light
+    // They are opposite vectors -> negate light.direction
+    float theta = dot(normalize(-light.direction.xyz), L);
+
+    float innerCut = light.angles.x;
+    float outerCut = light.angles.y;
+    float epsilon  = innerCut - outerCut;
+
+    float intensity = clamp(
+        (theta - outerCut) / max(epsilon, 0.001),
+        0.0,
+        1.0
+    );
+
+    if (intensity <= 0.0)
+        return vec3(0.0);
+
     float distance = length(light.position.xyz - fragPos);
-
-    if(distance > light.attenuation.w)
+    if (distance > light.attenuation.w)
         return vec3(0.0);
 
-    float theta = dot(L, normalize(light.direction.xyz));
-    float epsilon = light.angles.x - light.angles.y;
-    float intensity = clamp((theta - light.angles.y) / max(epsilon, 0.001), 0.0, 1.0);
+    float atten = 1.0 / (
+        light.attenuation.x +
+        light.attenuation.y * distance +
+        light.attenuation.z * distance * distance
+    );
 
-    if(intensity <= 0.0)
-        return vec3(0.0);
+    float rangeFade = 1.0 - clamp(distance / light.attenuation.w, 0.0, 1.0);
+    atten *= rangeFade * rangeFade;
 
     float diff = max(dot(normal, L), 0.0);
     vec3 H = normalize(L + viewDir);
     float spec = pow(max(dot(normal, H), 0.0), 32.0);
 
-    float atten = 1.0 / (light.attenuation.x + light.attenuation.y*distance + light.attenuation.z*distance*distance);
-    float rangeFade = 1.0 - clamp(distance / light.attenuation.w, 0.0, 1.0);
-    atten *= rangeFade * rangeFade;
+    vec3 color = light.color.rgb / vec3(255.0);
 
-    vec3 color = light.color.rgb / vec3(255.0, 255.0, 255.0);
-
-    vec3 ambient  = light.ambient.rgb * color;
+    vec3 ambient  = light.ambient.rgb  * color;
     vec3 diffuse  = light.diffuse.rgb  * diff * color;
     vec3 specular = light.specular.rgb * spec * color;
 
-    vec3 result = ambient + diffuse + specular;
-
-    return result * atten * light.position.w;
+    return (ambient + diffuse + specular) * atten * intensity * light.position.w;
 }
 
+// ===============================
 // Main
+// ===============================
 void main()
 {
     vec3 normal  = normalize(vNormal);
@@ -120,22 +151,16 @@ void main()
         vec3 result = vec3(0.0);
 
         int pointCount = min(uNumPointLights, MAX_LIGHTS);
-        for(int i=0; i<pointCount; ++i)
+        for (int i = 0; i < pointCount; ++i)
             result += CalcPointLight(pointLights[i], normal, vWorldPos, viewDir);
 
         int spotCount = min(uNumSpotLights, MAX_LIGHTS);
-        for(int i=0; i<spotCount; ++i)
+        for (int i = 0; i < spotCount; ++i)
             result += CalcSpotLight(spotLights[i], normal, vWorldPos, viewDir);
-            
+
         FragColor = vec4(result * albedo, 1.0);
     }
     else {
         FragColor = vec4(albedo, 1.0);
     }
-
-
-    // if (!gl_FrontFacing)
-    //     FragColor = vec4(1, 0, 0, 1);
-    // else
-    //     FragColor = vec4(0, 1, 0, 1);
 }

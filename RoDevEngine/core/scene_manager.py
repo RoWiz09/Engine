@@ -84,15 +84,14 @@ class SceneManager:
 
             return scripts
 
-        if sys.argv[-1] == "--editor":
+        self.editor = sys.argv[-1] == "--editor" and not 'compiled' in os.environ
+        if self.editor:
             self.scripts = get_scripts()
 
         self.last_time = glfw.get_time()
         self.accumulator = 0.0
 
         self.active_camera: Camera = None
-
-        self.editor = sys.argv[-1] == "--editor"
 
         if self.editor:
             self.editor_camera_active = False

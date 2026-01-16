@@ -99,7 +99,3 @@ class CubeCollider(Behavior):
                     elif not in_this_frame and in_last_frame:
                         for component in self.gameobject.components:
                             component.on_trigger_exit(collider.gameobject)
-    
-    def on_collision_start(self, other):
-        print("WOW!")
-        return super().on_collision_start(other)

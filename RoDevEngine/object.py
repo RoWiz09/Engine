@@ -1,3 +1,4 @@
+from __future__ import annotations
 from typing_extensions import overload
 
 from .core.logger import Logger
@@ -26,6 +27,11 @@ class Object:
         self.components : list[Behavior] = []
 
         transform.gameobject = self
+
+        self.children: list[Object] = []
+
+        if transform.parent:
+            transform.parent.gameobject.children.append(self)
 
         self.__transform = transform
         self.__enabled = True
@@ -111,3 +117,25 @@ class Object:
         else:
             Logger("CORE").log_warning(f"{type(state).__name__} is not of type bool")
             return self
+    
+    # -- GET CHILD METHODS --
+    def get_child_by_name(self, name: str):
+        for child in self.children:
+            if child.name == name:
+                return child
+    
+    def get_children_by_name(self, name: str, limit=-1):
+        out = []
+        for child in self.children:
+            if child.name == name:
+                out.append(child)
+                if len(out) == limit:
+                    return out
+                
+        return out
+    
+    def get_child_with_component(self, component_class: T) -> Object:
+        for child in self.children:
+            for component in child.components:
+                if isinstance(component, component_class):
+                    return child

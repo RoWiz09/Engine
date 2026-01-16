@@ -41,11 +41,6 @@ class SpotLightUBO(ctypes.Structure):
         ("attenuation", ctypes.c_float * 4),
     ]
 
-
-# ===============================
-# Shader Program
-# ===============================
-
 class ShaderProgram:
     MAX_LIGHTS = 64
 
@@ -54,9 +49,6 @@ class ShaderProgram:
         self.fragment_src = fragment_src
         self.program_id = self._create_shader_program()
 
-    # -------------------------------------------------
-    # Shader compilation / linking
-    # -------------------------------------------------
 
     def _create_shader_program(self):
         vertex_shader = glCreateShader(GL_VERTEX_SHADER)
@@ -90,10 +82,7 @@ class ShaderProgram:
         if not glGetShaderiv(shader, GL_COMPILE_STATUS):
             error = glGetShaderInfoLog(shader).decode()
             raise RuntimeError(f"{stage} shader compilation error:\n{error}")
-
-    # -------------------------------------------------
-    # UBO setup (GL 3.3 compatible)
-    # -------------------------------------------------
+        
 
     def _setup_light_ubos(self, program):
         # ---------- Point Lights ----------
@@ -233,18 +222,14 @@ class ShaderProgram:
         glBindBuffer(GL_UNIFORM_BUFFER, self.spot_light_ubo)
 
         for i, light in enumerate(lights):
-            forward = glm.vec3(0, 0, 1)
-
-            direction = glm.normalize(
-                light.gameobject.transform.rot * forward
-            )
+            direction = light.gameobject.transform.forward
 
             data = SpotLightUBO(
                 (*light.gameobject.transform.pos, light.intensity),
                 (*direction, 0.0),
 
-                (glm.cos(light.cutOff),
-                glm.cos(light.outerCutOff),
+                (glm.cos(light.cutoff_radians),
+                glm.cos(light.outer_cutoff_radians),
                 0.0, 0.0),
 
                 (*light.color, 0.0),

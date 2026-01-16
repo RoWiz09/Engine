@@ -73,7 +73,7 @@ class Window:
         self.scene_manager = SceneManager()
 
         Window._created = True
-        self.editor = sys.argv[-1] == "--editor"
+        self.editor = sys.argv[-1] == "--editor" and not 'compiled' in os.environ
 
         if self.editor:
             imgui.create_context()

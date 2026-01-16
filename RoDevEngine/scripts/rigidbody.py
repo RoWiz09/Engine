@@ -38,15 +38,17 @@ class Rigidbody(Behavior):
 
     def on_collision_start(self, other):
         self.grounded = True
-        print("wow")
 
         if self.velocity.y < 0:
             self.velocity.y = 0
     
     def on_collision_exit(self, other):
         self.grounded = False
-        print("wow2")
 
         if self.velocity.y < 0:
             self.velocity.y = 0
-        
+
+    def add_force_vector(self, force: glm.vec3):
+        self.velocity += force
+        if self.velocity.y > 0:
+            self.grounded = False

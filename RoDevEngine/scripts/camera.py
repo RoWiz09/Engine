@@ -1,6 +1,8 @@
 from .behavior import *
 from pyglm import glm
 
+from ..helpers import clamp
+
 class Camera(Behavior):
     category = "Rendering"
 
@@ -17,3 +19,4 @@ class Camera(Behavior):
 
         if not isinstance(self.position_mod, glm.vec3):
             self.position_mod = glm.vec3(self.position_mod)
+        

@@ -1,5 +1,5 @@
 from .behavior import *
-from pyglm.glm import vec3, quat
+from pyglm.glm import vec3, quat, radians
 from enum import Enum
 
 class Pointlight(Behavior):
@@ -33,12 +33,20 @@ class Spotlight(Behavior):
 
     direction = EditorField("vec3", vec3())
     range = EditorField("float", 1)
-    cutOff = EditorField("float", 1)
-    outerCutOff = EditorField("float", 1)
+    cutOff = EditorField("float", 57)
+    outerCutOff = EditorField("float", 57)
 
     constant = EditorField("float", 1.0)
     linear = EditorField("float", 0.09)
     quadratic = EditorField("float", 0.032)
 
     def __init__(self, gameobject):
+        self.cutoff_radians = radians(self.cutOff)
+        self.outer_cutoff_radians = radians(self.outerCutOff)
         super().__init__(gameobject)
+
+    def update(self, dt):
+        self.cutoff_radians = radians(self.cutOff)
+        self.outer_cutoff_radians = radians(self.outerCutOff)
+
+        return super().update(dt)
