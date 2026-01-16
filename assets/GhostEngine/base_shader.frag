@@ -14,9 +14,6 @@ in vec2 vTexCoord;
 
 out vec4 FragColor;
 
-// ===============================
-// Point Light
-// ===============================
 struct PointLight {
     vec4 position;
     vec4 ambient;
@@ -32,13 +29,10 @@ layout(std140) uniform PointLightBlock {
 
 uniform int uNumPointLights;
 
-// ===============================
-// Spot Light
-// ===============================
 struct SpotLight {
     vec4 position;
-    vec4 direction;   // MUST be light -> forward direction
-    vec4 angles;      // x = innerCutoff (cos), y = outerCutoff (cos)
+    vec4 direction;
+    vec4 angles;
     vec4 color;
     vec4 ambient;
     vec4 diffuse;
@@ -52,9 +46,6 @@ layout(std140) uniform SpotLightBlock {
 
 uniform int uNumSpotLights;
 
-// ===============================
-// Point Light Calculation
-// ===============================
 vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
 {
     vec3 L = normalize(light.position.xyz - fragPos);
@@ -85,18 +76,10 @@ vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
     return (ambient + diffuse + specular) * atten * light.position.w;
 }
 
-// ===============================
-// Spot Light Calculation (FIXED)
-// ===============================
 vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
 {
-    // Vector from fragment -> light (used consistently everywhere)
     vec3 L = normalize(light.position.xyz - fragPos);
 
-    // Spotlight cone test
-    // light.direction points FORWARD from the light
-    // L points TOWARD the light
-    // They are opposite vectors -> negate light.direction
     float theta = dot(normalize(-light.direction.xyz), L);
 
     float innerCut = light.angles.x;
@@ -113,8 +96,6 @@ vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
         return vec3(0.0);
 
     float distance = length(light.position.xyz - fragPos);
-    if (distance > light.attenuation.w)
-        return vec3(0.0);
 
     float atten = 1.0 / (
         light.attenuation.x +
@@ -138,9 +119,6 @@ vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
     return (ambient + diffuse + specular) * atten * intensity * light.position.w;
 }
 
-// ===============================
-// Main
-// ===============================
 void main()
 {
     vec3 normal  = normalize(vNormal);

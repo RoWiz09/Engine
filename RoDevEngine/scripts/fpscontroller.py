@@ -11,6 +11,8 @@ from pyglm import glm
 
 class FPSController(Behavior):
     speed = EditorField("int", 10)
+
+    can_jump = EditorField("bool", True)
     jump_force = EditorField("float", 5.0)
 
     mouse_sens = EditorField("float", 1.0)
@@ -21,9 +23,10 @@ class FPSController(Behavior):
     def on_scene_load(self, scene_info):
         Input().set_cursor_visibility(CursorStates.HIDDEN)
 
-        self.rigidbody = self.gameobject.get_component(Rigidbody)
-        if not self.rigidbody:
-            Logger("FPS CONTROLLER").log_error("The FPS controller's gameobject is missing a rigidbody!")
+        if self.can_jump == True:
+            self.rigidbody = self.gameobject.get_component(Rigidbody)
+            if not self.rigidbody:
+                Logger("FPS CONTROLLER").log_error("The FPS controller's gameobject is missing a rigidbody, which is needed for jumping!")
 
         self.camera = self.gameobject.get_child_with_component(Camera)
         if not self.camera:
