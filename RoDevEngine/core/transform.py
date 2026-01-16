@@ -95,7 +95,7 @@ class Transform:
         front.y = np.sin(rot.x)
         front.z = np.sin(rot.y) * np.cos(rot.x)
 
-        return glm.normalize(front) * glm.quat(glm.radians(glm.vec3(0, 0, 0)))
+        return glm.normalize(front)
     
     @property
     def forward(self):
