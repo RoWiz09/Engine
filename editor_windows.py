@@ -1,13 +1,15 @@
 from __future__ import annotations
-from collections.abc import Iterable
 
-from ..core.scene_manager import SceneManager
-from ..object import Object
-from ..scripts.behavior import Behavior, EditorField
+from ghost_engine.core.scene_manager import SceneManager
 
-from ..core import transform
+from ghost_engine.object import Object
+from ghost_engine.behavior import Behavior, EditorField
 
-from ..core.logger import Logger
+from ghost_engine.core import transform
+
+from ghost_engine.core.logger import Logger
+
+from ghost_engine.build import build_game
 from pyglm import glm
 
 import imgui
@@ -21,6 +23,7 @@ def register_menu(name: str):
     menu_registry[name] = []
 
 register_menu("File")
+register_menu("View")
 register_menu("Scene")
 register_menu("Other")
 
@@ -29,19 +32,40 @@ class EditorWindow:
     allow_multiple = False
     keybind = ""
 
+    INSTANCES = []
     def __init_subclass__(cls: object):
         if cls.menu in menu_registry:
             menu_registry[cls.menu].append(cls)
 
-    def render(self) -> bool:
+    @classmethod
+    def create(cls, *args):
+        if cls.allow_multiple:
+            res = cls.handle_multiple(*args)
+
+            if not res:
+                return None
+            
+        return cls(*args)
+
+    def render(self, special_id = "") -> bool:
         imgui.push_style_var(imgui.STYLE_WINDOW_PADDING, (5, 5))
-        window = imgui.begin(type(self).__name__, True, flags=imgui.WINDOW_ALWAYS_AUTO_RESIZE|imgui.WINDOW_NO_RESIZE)
+        id_ = type(self).__name__
+        if special_id != "":
+            id_ = special_id
+        window = imgui.begin(type(self).__name__ + "###" + id_, True, flags=imgui.WINDOW_ALWAYS_AUTO_RESIZE|imgui.WINDOW_NO_RESIZE)
         imgui.pop_style_var(imgui.STYLE_WINDOW_PADDING)
         if not window.opened:
             imgui.end()
             return None
 
         return window
+    
+    @classmethod
+    def handle_multiple(cls, *args):
+        return True
+    
+    def destroy(self):
+        self.__class__.INSTANCES.remove(self)
 
 class Hierarchy(EditorWindow):
     menu = "Scene"
@@ -55,7 +79,7 @@ class Hierarchy(EditorWindow):
 
         obj_id = 0
         
-        from ..core.window import Window
+        from ghost_engine.core.window import Window
         with window:
             width = 200
 
@@ -67,9 +91,9 @@ class Hierarchy(EditorWindow):
             for obj, children in hierarchy.items():
                 imgui.push_id(str(obj_id))
                 if imgui.button(obj.name, width):
-                    inspector = Inspector()
-                    inspector.object = obj
-                    Window().open_editor_window(inspector)
+                    inspector = Inspector.create(obj)
+                    if inspector:
+                        Window().open_editor_window(inspector)
                 imgui.pop_id()
 
                 obj_id += 1
@@ -84,9 +108,9 @@ class Hierarchy(EditorWindow):
                         imgui.set_cursor_pos_x(20 * (len(steps) + 1) + 8)
                         imgui.push_id(str(obj_id))
                         if imgui.button(child_obj.name, width - 20 * (len(steps) + 1) - 5):
-                            inspector = Inspector()
-                            inspector.object = child_obj
-                            Window().open_editor_window(inspector)
+                            inspector = Inspector.create(child_obj)
+                            if inspector:
+                                Window().open_editor_window(inspector)
 
                         imgui.pop_id()
 
@@ -108,9 +132,21 @@ class Hierarchy(EditorWindow):
         return False
 
 class Inspector(EditorWindow):
-    allow_multiple = False
-    def __init__(self):
-        self.object: Object = None
+    allow_multiple = True
+
+    @classmethod
+    def handle_multiple(cls, *args):
+        object_ = args[0]
+
+        for inst in cls.INSTANCES:
+            if inst.object == object_:
+                return False
+            
+        return True
+
+    def __init__(self, object_: Object):
+        self.__class__.INSTANCES.append(self)
+        self.object: Object = object_
         self.cur_comp_category = None
 
     def render(self):
@@ -118,7 +154,7 @@ class Inspector(EditorWindow):
             Logger("EDITOR").log_error("An inspector is missing an object! How did that happen?!")
             return True
         
-        window = super().render()
+        window = super().render(str(self.object))
         if not window:
             return True
         
@@ -172,7 +208,7 @@ class Inspector(EditorWindow):
                 imgui.pop_id()
                 var_id += 1
                 
-                # --- Iterate over EditorFields on the class ---
+                # Editor Fields
                 for var_name, field in vars(type(component)).items():
                     imgui.push_id(str(var_id))
                     if isinstance(field, EditorField):
@@ -349,6 +385,73 @@ class Freecam(EditorWindow):
             if changed:
                 SceneManager().editor_camera.zoom = value
 
+class FileViewer(EditorWindow):
+    allow_multiple = True
+
+    @classmethod
+    def handle_multiple(cls, *args):
+        file = args[0]
+
+        for inst in cls.INSTANCES:
+            if inst.file == file:
+                return False
+            
+        return True
+    
+    def __init__(self, file_path):
+        super().__init__()
+        type(self).INSTANCES.append(self)
+
+        self.file = file_path
+
+    def render(self):
+        window = super().render()
+        if not window:
+            return True
+
+        with window:
+            changed, value = imgui.input_text("File:", self.file)
+            if changed:
+                os.rename(self.file, value)
+                self.file = value
+
+class Files(EditorWindow):
+    menu="View"
+
+    def __init__(self):
+        super().__init__()
+
+        self.selected_directory = []
+
+    def render(self):
+        from ghost_engine.core.window import Window
+
+        window = super().render()
+        if not window:
+            return True
+        
+        with window:
+            base_path = os.path.join(".", "assets", *self.selected_directory)
+            if len(self.selected_directory) > 0:
+                state = imgui.button("...", width=200)
+                if state:
+                    self.selected_directory = self.selected_directory[:-1]
+
+            for path in os.listdir(base_path):
+                if path.startswith("__"):
+                    continue
+
+                state = imgui.button(path, width=200)
+                if state:
+                    path_ = os.path.join(base_path, path)
+                    if os.path.isdir(path_):
+                        self.selected_directory.append(path)
+
+                    elif os.path.isfile(path_):
+                        file_view = FileViewer(path_)
+                        if file_view:
+                            Window().open_editor_window(file_view)
+
 class MenuObject:
     menu = None
     keybind = ""
@@ -366,3 +469,10 @@ class Save(MenuObject):
     
     def on_click():
         SceneManager().save()
+
+class Build(MenuObject):
+    menu = "File"
+    keybind = "Ctrl+Shift+B"
+    
+    def on_click():
+        build_game()

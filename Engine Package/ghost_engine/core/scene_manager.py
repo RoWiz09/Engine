@@ -1,27 +1,25 @@
 from ..rendering.shader_program import ShaderProgram
-from ..scripts.camera import Camera
 from ..rendering.material import Material
-from ..scripts.behavior import Behavior, EditorField
 from .transform import Transform
-from ..scripts.light import Pointlight, Spotlight
 from .packer import Pack
 from ..object import Object 
 from .input import Input, KeyCodes
+
+from ..behavior import Behavior
+from ..camera import Camera
+from ..light import *
 
 from pyglm import glm
 
 from PIL import Image as image
 
-from RoDevEngine.core.logger import Logger
+from .logger import Logger
 
 from dataclasses import dataclass
 
 import os, json, importlib, glfw, sys
 import numpy as np
 import inspect
-
-# Import to register scripts
-from ..scripts.collider import *
 
 @dataclass(frozen=True)
 class SceneInfo:
@@ -91,7 +89,7 @@ class SceneManager:
         self.last_time = glfw.get_time()
         self.accumulator = 0.0
 
-        self.active_camera: Camera = None
+        self.active_camera = None
 
         if self.editor:
             self.editor_camera_active = False
@@ -564,5 +562,5 @@ class SceneManager:
                 data["scene_index"] = idx
 
                 scenefile.seek(0)
-                json.dump(data, scenefile)
+                json.dump(data, scenefile, indent=4)
             

@@ -1,5 +1,5 @@
 # RoDevEngine
-A custom game engine built using Python, PyOpengl, and GLFW. 
+A custom, open-source game engine built using Python, PyOpengl, and GLFW. 
 
 ## Features:
 - Windows

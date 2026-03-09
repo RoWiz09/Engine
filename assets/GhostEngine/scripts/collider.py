@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from .behavior import Behavior, EditorField
-from ..object import Object
+from ghost_engine.behavior import Behavior, EditorField
+from ghost_engine.object import Object
 
 from pyglm.glm import vec3
 
@@ -58,7 +58,7 @@ class CubeCollider(Behavior):
         cls.triggers_this_frame.clear()
 
     def update(self, dt):
-        from ..core.scene_manager import SceneManager
+        from ghost_engine.core.scene_manager import SceneManager
 
         for obj in SceneManager().get_objects_with_component(CubeCollider):
             if obj is self.gameobject:

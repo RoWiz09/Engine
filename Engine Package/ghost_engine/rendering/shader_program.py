@@ -1,6 +1,6 @@
 from OpenGL.GL import *
 from ..core.logger import Logger
-from ..scripts.light import Pointlight, Spotlight
+from ..light import Pointlight, Spotlight
 from pyglm import glm
 import numpy as np
 import ctypes

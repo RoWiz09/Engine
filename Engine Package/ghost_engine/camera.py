@@ -1,8 +1,6 @@
 from .behavior import *
 from pyglm import glm
 
-from ..helpers import clamp
-
 class Camera(Behavior):
     category = "Rendering"
 

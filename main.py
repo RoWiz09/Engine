@@ -1,14 +1,12 @@
-import RoDevEngine
+import ghost_engine.core.logger as logger
+import ghost_engine.core.settings
 
-import RoDevEngine.core.logger as logger
-import RoDevEngine.core.settings
-
-settings = RoDevEngine.core.settings.Settings()
+settings = ghost_engine.core.settings.Settings()
 win_width = int(settings.get_setting("window_width", 800))
 win_height = int(settings.get_setting("window_height", 600))
 
-RoDevEngine.set_logging_level(RoDevEngine.LoggingLevels.DEBUG)
-window = RoDevEngine.init(window_width=win_width, window_height=win_height)
+ghost_engine.set_logging_level(ghost_engine.LoggingLevels.DEBUG)
+window = ghost_engine.init(window_width=win_width, window_height=win_height)
 
 while not window.should_close():
     window.update()

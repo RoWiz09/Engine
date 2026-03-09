@@ -5,8 +5,6 @@ from .logger import Logger
 from .scene_manager import SceneManager
 from .input import Input
 
-from ..editor import editor_windows
-
 import glfw
 import sys, os, OpenGL.GL as gl
 
@@ -73,13 +71,6 @@ class Window:
         self.scene_manager = SceneManager()
 
         Window._created = True
-        self.editor = sys.argv[-1] == "--editor" and not 'compiled' in os.environ
-
-        if self.editor:
-            imgui.create_context()
-            self.editor_renderer = GlfwRenderer(self.window)
-
-            self.open_windows: list[editor_windows.EditorWindow] = []
 
     def should_close(self):
         return glfw.window_should_close(self.window)
@@ -95,50 +86,5 @@ class Window:
 
         self.scene_manager.update_scene()
 
-        if self.editor:
-            self.__render_editor_ui()
-
         glfw.swap_buffers(self.window)
-
-    def open_editor_window(self, window: editor_windows.EditorWindow):
-        if not window.allow_multiple:
-            for idx, window_ in enumerate(self.open_windows):
-                if isinstance(window_, type(window)):
-                    self.open_windows[idx] = window
-                    return
-                
-        self.open_windows.append(window)
-
-    def __render_editor_ui(self):
-        self.editor_renderer.process_inputs()
-
-        imgui.new_frame()
-
-        with imgui.begin_main_menu_bar() as main_menu_bar:
-            if main_menu_bar.opened:
-                for menu, windows in editor_windows.menu_registry.items():
-                    with imgui.begin_menu(menu, True) as menu:
-                        if menu.opened:
-                            for window in windows:
-                                if imgui.menu_item(window.__name__, window.keybind)[1]:
-                                    if issubclass(window, editor_windows.EditorWindow):
-                                        self.open_editor_window(window())
-                                    else:
-                                        window.on_click()
-
-        for idx, window in enumerate(self.open_windows.copy()):
-            kill = window.render()
-            if kill:
-                self.open_windows.pop(idx)
-
-        imgui.render()
-        self.editor_renderer.render(imgui.get_draw_data())
-
-    def size(self):
-        return glfw.get_window_size(self.window)
-
-    def quit(self):
-        glfw.set_window_should_close(self.window, True)
-
-    def terminate(self):
-        glfw.terminate()
+    

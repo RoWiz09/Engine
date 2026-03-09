@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..core.logger import Logger
+from .core.logger import Logger
 import sys
 
 def register_editor_button(func):
@@ -64,7 +64,7 @@ class Behavior:
         Behavior.component_category_registry[cls.category].append(cls)
         
     def __init__(self, gameobject):
-        from RoDevEngine.object import Object
+        from .object import Object
         self.__gameobject: Object = gameobject
         self.__enabled = True
     
@@ -88,7 +88,7 @@ class Behavior:
 
     @property
     def window(self):
-        from ..core.window import Window
+        from .core.window import Window
         return Window()
     
     @classmethod

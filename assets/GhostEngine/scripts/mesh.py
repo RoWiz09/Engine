@@ -1,12 +1,11 @@
-from .behavior import Behavior, EditorField, InitMethod, register_editor_button
-from ..core.logger import Logger
+from ghost_engine.behavior import Behavior, EditorField, InitMethod, register_editor_button
+from ghost_engine.core.logger import Logger
 
-from ..core.packer import Pack
+from ghost_engine.core.packer import Pack
 
-from ..object import Object
-from ..rendering.material import Material
+from ghost_engine.object import Object
+from ghost_engine.rendering.material import Material
 from OpenGL import GL
-import pyglm.glm as glm
 import numpy as np
 import hashlib
 

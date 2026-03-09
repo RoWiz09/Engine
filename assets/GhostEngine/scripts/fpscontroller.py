@@ -1,12 +1,11 @@
-from ..scripts.behavior import *
-from ..core.input import KeyCodes, Input, CursorStates, MouseButtons
-from ..core.logger import Logger
+from ghost_engine.behavior import *
+from ghost_engine.core.input import KeyCodes, Input, CursorStates, MouseButtons
+from ghost_engine.core.logger import Logger
 
-from ..editor.editor_windows import EditorWindow, register_menu
-from ..scripts.rigidbody import Rigidbody
-from ..scripts.camera import Camera
+from .rigidbody import Rigidbody
+from ghost_engine.camera import Camera
 
-from ..helpers import clamp
+from ghost_engine.math import clamp
 from pyglm import glm
 
 class FPSController(Behavior):
