@@ -2,17 +2,19 @@ from __future__ import annotations
 import os, enum, colorama
 from pathlib import Path
 
-if not os.path.isdir("logs"):
-    os.makedirs("logs")
-
-if os.path.isfile("logs/last_log.log"):
-    os.remove("logs/last_log.log")
-if os.path.isfile("logs/latest.log"):
-    os.rename("logs/latest.log", "logs/last_log.log")
-
-_log_file = open("logs/latest.log", "a+")
-
+_log_file = None
 log_to_console = False
+def setup():
+    global _log_file
+    if not os.path.isdir("logs"):
+        os.makedirs("logs")
+
+    if os.path.isfile("logs/last_log.log"):
+        os.remove("logs/last_log.log")
+    if os.path.isfile("logs/latest.log"):
+        os.rename("logs/latest.log", "logs/last_log.log")
+
+    _log_file = open("logs/latest.log", "a+")
 
 class LoggingLevels(enum.Enum):
     DEBUG = 0

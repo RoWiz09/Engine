@@ -12,7 +12,7 @@ from ghost_engine.core.logger import Logger
 from ghost_engine.build import build_game
 from pyglm import glm
 
-import imgui
+from . import window_drawer
 import json
 import os
 

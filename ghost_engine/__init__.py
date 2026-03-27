@@ -1,6 +1,12 @@
-from .core.logger import LoggingLevels
+from .core.logger import *
+from .core.scene_manager import SceneManager
+from .core.input import *
 
-def init(window_width = 800, window_height = 600, window_name = "Test"):
+def init():
+    from .core.logger import setup
+    setup()
+
+def init_window(window_width = 800, window_height = 600, window_name = "Test"):
     from .core.window import Window
     return Window(window_width, window_height, window_name)
 

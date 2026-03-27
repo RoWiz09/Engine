@@ -1,0 +1,9 @@
+pyopengl
+glfw
+numpy
+typing_extensions
+pyglm
+colorama
+imgui_bundle
+pyinstaller
+pillow

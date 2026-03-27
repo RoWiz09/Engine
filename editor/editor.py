@@ -1,19 +1,16 @@
 from __future__ import annotations
 from typing_extensions import overload
 
-from ghost_engine.core.logger import Logger
-from ghost_engine.core.scene_manager import SceneManager
-from ghost_engine.core.input import Input
-
-from ghost_engine.argument_parser import ArgumentParser
-
-from editor_windows import *
+from systems.argument_parser import ArgumentParser
+# from systems.editor_windows import *
 
 import glfw
-import sys, os, OpenGL.GL as gl
+import os, OpenGL.GL as gl
 
-from imgui.integrations.glfw import GlfwRenderer
-import imgui
+from systems.window_drawer import WindowDrawer, EditorUiWindow
+from systems.get_modules import get_modules
+
+import json
 
 glfw_initalized = False
 
@@ -48,7 +45,7 @@ class Window:
         if not glfw_initalized:
             glfw.init()
 
-        self.logger = Logger("CORE")
+        self.logger = Logger("EDITOR")
 
         glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
         glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
@@ -66,22 +63,24 @@ class Window:
 
         self.input_handler = Input()
 
+        self.project_data = None
+
         compiled = not os.path.isfile(".rproj") # If there is a .rproj file, then the project has not been built yet.
         if compiled:
-            os.environ['compiled'] = ""
+            self.logger.log_fatal("Unable to edit a compiled game!")
         else:
             with open(".rproj") as project_file:
-                name = project_file.readline().split("=")[1]
-                name = name[:-2]
+                self.project_data = json.load(project_file)
             os.environ["project"] = name
         self.scene_manager = SceneManager()
 
         Window._created = True
 
-        imgui.create_context()
-        self.editor_renderer = GlfwRenderer(self.window)
+        # imgui.create_context()
+        # self.editor_renderer = GlfwRenderer(self.window)
 
-        self.open_windows: list[EditorWindow] = []
+        self.drawer = WindowDrawer()
+        self.drawer.add_window_data(EditorUiWindow("WOW!").resize(50, 50).move(50, 50))
 
     def should_close(self):
         return glfw.window_should_close(self.window)
@@ -101,39 +100,8 @@ class Window:
 
         glfw.swap_buffers(self.window)
 
-    def open_editor_window(self, window: EditorWindow):
-        if not window.allow_multiple:
-            for idx, window_ in enumerate(self.open_windows):
-                if isinstance(window_, type(window)):
-                    self.open_windows[idx] = window
-                    return
-                
-        self.open_windows.append(window)
-
     def __render_editor_ui(self):
-        self.editor_renderer.process_inputs()
-
-        imgui.new_frame()
-
-        with imgui.begin_main_menu_bar() as main_menu_bar:
-            if main_menu_bar.opened:
-                for menu, windows in menu_registry.items():
-                    with imgui.begin_menu(menu, True) as menu:
-                        if menu.opened:
-                            for window in windows:
-                                if imgui.menu_item(window.__name__, window.keybind)[1]:
-                                    if issubclass(window, EditorWindow):
-                                        self.open_editor_window(window())
-                                    else:
-                                        window.on_click()
-
-        for idx, window in enumerate(self.open_windows.copy()):
-            kill = window.render()
-            if kill:
-                self.open_windows.pop(idx)
-
-        imgui.render()
-        self.editor_renderer.render(imgui.get_draw_data())
+        self.drawer.render()
 
     def size(self):
         return glfw.get_window_size(self.window)
@@ -149,4 +117,16 @@ arg_parser.add_argument("project-path")
 
 arg_parser.parse()
 
-Window(arg_parser.project_path)
+def get_path(location: str):
+    if not location.endswith(".rproj") and os.path.exists(location):
+        raise ValueError("Executable argument project-path is",
+                         "pointing to an invalid or missing project!")
+    
+    return os.path.split(location)[0]
+
+base_path = get_path(arg_parser.get_arg("project-path"))
+Logger, SceneManager, Input = get_modules(base_path)
+
+window = Window(base_path)
+while not window.should_close():
+    window.update()

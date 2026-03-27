@@ -55,4 +55,6 @@ class ArgumentParser:
 
         if len(required_args) != required_arg_idx:
             raise ArgumentError("Script is missing required argument(s): " + ", ".join(arg.arg_name for arg in required_args[required_arg_idx:]))
-        
+
+    def get_arg(self, name: str):
+        return getattr(self, name)

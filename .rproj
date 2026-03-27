@@ -1,4 +1,6 @@
-name=testproj,
-dlc = {
-    dlc0: testproj
+{
+    "name":"testproj",
+    "dlc":{
+        "dlc0": "testproj"
+    }
 }
