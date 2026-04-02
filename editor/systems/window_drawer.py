@@ -25,7 +25,7 @@ class WindowDrawer:
         print("WOW!!")
         
         setup()
-        self.windows: set[Window] = set()
+        self.windows: set[EditorUiWindow] = set()
 
         __class__.INITALIZED = True
 
@@ -36,7 +36,7 @@ class WindowDrawer:
         for window in self.windows:
             window.draw(ortho)
 
-    def add_window_data(self, window_data: Window):
+    def add_window_data(self, window_data: EditorUiWindow):
         self.windows.add(window_data)
 
 WINDOW_SHADER = None
@@ -48,6 +48,7 @@ def setup():
             #version 330 core
 
             layout (location = 0) in vec2 aPos;
+            layout (location = 0) in vec2 aTexCoords;
 
             uniform mat4 uModel;
             uniform mat4 uProjection;
@@ -67,10 +68,11 @@ def setup():
     """)
 
     verts = np.array([
-        0, 0,
-        0, 1,
-        1, 1,
-        1, 0
+        # Pos, UV
+        0, 0,  0, 0,
+        0, 1,  0, 1,
+        1, 1,  1, 1,
+        1, 0,  1, 0
     ], dtype=np.float32)
 
     indices = np.array([
