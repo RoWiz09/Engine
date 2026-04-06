@@ -1,8 +1,9 @@
-from .behavior import *
-from pyglm.glm import vec3, quat, radians
-from enum import Enum
+from ghost_engine.behavior import *
+from ghost_engine.rendering.light_type import LightType, LightTypes
+from pyglm.glm import vec3, radians
 
-class Pointlight(Behavior):
+class Pointlight(Behavior, LightType):
+    light_type = LightTypes.POINT
     category = "Rendering"
 
     ambient = EditorField("vec3", vec3(0.05, 0.05, 0.05))
@@ -19,9 +20,10 @@ class Pointlight(Behavior):
     quadratic = EditorField("float", 0.032)
 
     def __init__(self, gameobject):
-        super().__init__(gameobject)  
+        super().__init__(gameobject)
 
-class Spotlight(Behavior):
+class Spotlight(Behavior, LightType):
+    light_type = LightTypes.SPOT
     category = "Rendering"
     
     ambient = EditorField("vec3", vec3(0.05, 0.05, 0.05))
@@ -41,9 +43,9 @@ class Spotlight(Behavior):
     quadratic = EditorField("float", 0.032)
 
     def __init__(self, gameobject):
+        super().__init__(gameobject)
         self.cutoff_radians = radians(self.cutOff)
         self.outer_cutoff_radians = radians(self.outerCutOff)
-        super().__init__(gameobject)
 
     def update(self, dt):
         self.cutoff_radians = radians(self.cutOff)

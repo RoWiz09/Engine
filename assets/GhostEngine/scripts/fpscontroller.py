@@ -3,7 +3,7 @@ from ghost_engine.core.input import KeyCodes, Input, CursorStates, MouseButtons
 from ghost_engine.core.logger import Logger
 
 from .rigidbody import Rigidbody
-from ghost_engine.camera import Camera
+from .camera import Camera
 
 from ghost_engine.math import clamp
 from pyglm import glm

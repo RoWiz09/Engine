@@ -6,8 +6,9 @@ from ..object import Object
 from .input import Input, KeyCodes
 
 from ..behavior import Behavior
-from ..camera import Camera
-from ..light import *
+
+from ..rendering.camera_type import CamType
+
 
 from pyglm import glm
 
@@ -46,8 +47,6 @@ class SceneManager:
         if SceneManager._created:
             return
 
-        print("WOW!")
-
         self.materials = {}
         SceneManager._created = True
         
@@ -66,102 +65,134 @@ class SceneManager:
                 data = Pack().get_as_json_dict(scene_path)
                 return data["scene_index"]
 
-        self.scenes = dict(sorted(self.get_scenes().items(), key=get_index))
-        self.shaders = self.get_shaders()
-        self.get_materials(self.shaders)
+        if self.compiled:
+            self.scenes, self.shaders = self.load_compiled_files()
+            self.scenes = dict(sorted(self.scenes.items(), key=get_index))
+
+        else:
+            self.scenes, self.shaders = self.load_files()
+
         self.game_objects: list[Object] = []
-
-        def get_scripts():            
-            if self.compiled:
-                Logger("CORE").log_fatal("Tried to get scripts while compiled!")
-
-            scripts = {}
-            
-            for dirpath, dirnames, files in os.walk("assets"):
-                for filename in files:
-                    if filename.endswith(".py"):
-                        module = importlib.import_module(os.path.join(dirpath, filename).replace(os.path.sep, ".").removesuffix(".py"))        
-
-            return scripts
-
-        self.editor = sys.argv[-1] == "--editor" and not 'compiled' in os.environ
-        if self.editor:
-            self.scripts = get_scripts()
 
         self.last_time = glfw.get_time()
         self.accumulator = 0.0
 
-        self.active_camera = None
-
-        # Load first scene by default
-        self.load_scene_index(0)
+        self.active_camera: CamType = None
 
         self.disable_lighting = False
 
-    def get_scenes(self) -> dict[str, str]:
-        """Returns dict of scene_name -> file_path"""
+    def load_files(self):
         scenes = {}
-        if not self.compiled:
-            for dirpath, _, filenames in os.walk("assets/"):
-                for filename in filenames:
-                    if filename.endswith(".rscene"):
-                        scenes[filename.removesuffix(".rscene")] = os.path.join(dirpath, filename)
-
-        else:
-            for file in self.pack.files:
-                if file.endswith(".rscene"):
-                    name = os.path.split(file)[-1].removesuffix(".rscene")
-
-                    scenes[name] = file
-
-        return scenes
-
-    def get_shaders(self) -> dict[str, ShaderProgram]:
-        """
-            Returns dict of shader_name -> ShaderProgram
-        """
         shaders = {}
-        if not self.compiled:
-            for dirpath, _, filenames in os.walk("assets/"):
-                for filename in filenames:
-                    if filename.endswith(".rshader"):
-                        # Get the shader name without the .rshader extension
-                        name = filename.removesuffix(".rshader")
-                        
-                        # Load the shader file
-                        with open(os.path.join(dirpath, filename)) as shader_file:
-                            shader_data = json.load(shader_file)
-                            vertex_path = shader_data.get("VertexShader", "")
-                            fragment_path = shader_data.get("FragmentShader", "")
-                            if not vertex_path or not fragment_path:
-                                continue
-                            with open(vertex_path) as f:
-                                vertex_src = f.read()
-                            with open(fragment_path) as f:
-                                fragment_src = f.read()
-                            
-                            if vertex_path and fragment_path:
-                                shaders[name] = ShaderProgram(vertex_src, fragment_src)
-                                shaders[name].use()
-                            else:
-                                Logger("SCENE MANAGEMENT").log_warning(f"Shader {name} is missing VertexShader or FragmentShader fields.")
-        
-        else:
-            for file in self.pack.files:
-                if file.endswith(".rshader"):
-                    name = os.path.split(file)[-1].removesuffix(".rshader")
+        mats = set()
 
-                    shader_data = self.pack.get_as_json_dict(file)
-                    vertex_path = shader_data.get("VertexShader", "assets\\GhostEngine\\base_shader.vert")
-                    fragment_path = shader_data.get("FragmentShader", "assets\\GhostEngine\\base_shader.frag")
+        for dirpath, _, filenames in os.walk("assets/"):
+            for filename in filenames:
+                path = os.path.join(dirpath, filename)
+
+                if filename.endswith(".rscene"):
+                    scenes[filename.removesuffix(".rscene")] = path
+
+                elif filename.endswith(".rshader"):
+                    # Get the shader name without the .rshader extension
+                    name = filename.removesuffix(".rshader")
                     
-                    if vertex_path and fragment_path:
-                        shaders[name] = ShaderProgram(self.pack.get(vertex_path), self.pack.get(fragment_path))
-                        shaders[name].use()
-                    else:
-                        Logger("SCENE MANAGEMENT").log_warning(f"Shader {name} is missing VertexShader or FragmentShader fields.")
+                    # Load the shader file
+                    with open(path) as shader_file:
+                        shader_data = json.load(shader_file)
+                        vertex_path = shader_data.get("VertexShader", "")
+                        fragment_path = shader_data.get("FragmentShader", "")
+                        if not vertex_path or not fragment_path:
+                            continue
+                        with open(vertex_path) as f:
+                            vertex_src = f.read()
+                        with open(fragment_path) as f:
+                            fragment_src = f.read()
                         
-        return shaders
+                        if vertex_path and fragment_path:
+                            shaders[name] = ShaderProgram(vertex_src, fragment_src)
+                            shaders[name].use()
+                        else:
+                            Logger("SCENE MANAGEMENT").log_warning(
+                                f"Shader {name} is missing VertexShader or FragmentShader fields.")
+
+                elif filename.endswith(".rmat"):
+                    mats.add(path)
+
+        for file in mats:
+            filename = os.path.split(file)[1]
+            name = filename.removesuffix(".rmat")
+                        
+            with open(file) as material_file:
+                material_data = json.load(material_file)
+                shader_path = material_data.get("shader_path", "")
+                texture_path = material_data.get("texture_path", None)
+                properties = material_data.get("properties", {})
+                
+                shader_name = os.path.basename(shader_path).removesuffix(".rshader")
+                if shader_name in shaders.keys():
+                    shader = shaders[shader_name]
+                else:
+                    Logger("SCENE MANAGEMENT").log_warning(f"Material {name} references unknown shader {shader_name}.")
+                    continue
+
+                img = None
+                if texture_path:
+                    img = image.open(texture_path)
+                    img = img.transpose(image.FLIP_TOP_BOTTOM)
+
+                Material(name, shader, img.tobytes() if img else None, img.size if img else None, properties)
+
+        return scenes, shaders
+
+    def load_compiled_files(self):
+        scenes = {}
+        shaders = {}
+        mats = set()
+
+        for file in self.pack.files():
+            if file.endswith(".rscene"):
+                name = os.path.split(file)[-1].removesuffix(".rscene")
+
+                scenes[name] = file
+                
+            elif file.endswith(".rshader"):
+                name = os.path.split(file)[-1].removesuffix(".rshader")
+
+                shader_data = self.pack.get_as_json_dict(file)
+                vertex_path = shader_data.get("VertexShader", "assets\\GhostEngine\\base_shader.vert")
+                fragment_path = shader_data.get("FragmentShader", "assets\\GhostEngine\\base_shader.frag")
+                
+                if vertex_path and fragment_path:
+                    shaders[name] = ShaderProgram(self.pack.get(vertex_path), self.pack.get(fragment_path))
+                    shaders[name].use()
+                else:
+                    Logger("SCENE MANAGEMENT").log_warning(f"Shader {name} is missing VertexShader or FragmentShader fields.")
+
+            elif file.endswith(".rmat"):
+                mats.add(file)
+
+        for file in mats:
+            name = os.path.split(file)[-1].removesuffix(".rmat")
+            material_data = self.pack.get_as_json_dict(file)
+
+            shader_path: str = material_data.get("shader_path", "")
+            texture_path: str = material_data.get("texture_path", None)
+            properties: dict[str, dict] = material_data.get("properties", {})
+            
+            shader_name = os.path.basename(shader_path).removesuffix(".rshader")
+            shader = shaders.get(shader_name, None)
+
+            if shader:
+                img = None
+                if texture_path:
+                    img = image.open(self.pack.get_io(texture_path))
+                
+                Material(name, shader, img.tobytes() if img else None, img.size if img else None, properties)
+            else:
+                Logger("CORE").log_warning(f"Material {name} references unknown shader: {shader_name}.") 
+
+        return scenes, shaders
     
     def get_materials(self, shaders:dict[str, ShaderProgram]) -> dict[str, Material]:
         """
@@ -192,33 +223,43 @@ class SceneManager:
                                 img = img.transpose(image.FLIP_TOP_BOTTOM)
 
                             Material(name, shader, img.tobytes() if img else None, img.size if img else None, properties)
-                                
-        else:
-            for file in self.pack.files:
-                if file.endswith(".rmat"):
-                    name = os.path.split(file)[-1].removesuffix(".rmat")
-                    material_data = self.pack.get_as_json_dict(file)
-
-                    shader_path: str = material_data.get("shader_path", "")
-                    texture_path: str = material_data.get("texture_path", None)
-                    properties: dict[str, dict] = material_data.get("properties", {})
-                    
-                    shader_name = os.path.basename(shader_path).removesuffix(".rshader")
-                    shader = shaders.get(shader_name, None)
-
-                    if shader:
-                        img = None
-                        if texture_path:
-                            img = image.open(self.pack.get_io(texture_path))
-                        
-                        Material(name, shader, img.tobytes() if img else None, img.size if img else None, properties)
-                    else:
-                        Logger("CORE").log_warning(f"Material {name} references unknown shader: {shader_name}.") 
+                
 
     def _instantiate_scene_objects(self, scene_data: dict) -> list[Object]:
         scene_objects = []
             
         game_objects: list[dict] = scene_data["objects"]
+
+        def instantiate_scripts(obj: Object, scripts: list[dict]):
+            obj_scripts = set()
+            for comp_data in scripts:
+                module = importlib.import_module(comp_data["module"])
+                cls = getattr(module, comp_data["class"])
+                vars_data: dict = comp_data.get("vars", {})
+
+                if issubclass(cls, Behavior):
+                    if cls.init_method is None:
+                        behavior = cls(obj)
+                        for var_name, value in vars_data.items():
+                            setattr(behavior, var_name, value)
+                        behavior.enabled = comp_data.get("active", True)
+
+                        if not self.active_camera and issubclass(type(behavior), CamType):
+                            self.active_camera = behavior
+
+                    else:
+                        behavior = cls.init_method(*vars_data, obj)
+
+                        behavior.enabled = comp_data.get("active", True)
+
+                    obj_scripts.add(behavior)
+                        
+                else:
+                    Logger("CORE").log_warning(
+                        f"Script {cls.__name__} is not a subclass of Behavior and cannot be applied to {obj.name}!"
+                    )   
+                
+            obj.add_components(*obj_scripts)
 
         def instantiate_object(obj_data: dict, parent: Object = None):
             object_name = obj_data["name"]
@@ -227,35 +268,7 @@ class SceneManager:
             game_object = Object(object_name, self.materials.get(obj_data["material"], self.materials["base_mat"]), object_transform)
             scripts = []
 
-            for comp_data in obj_data.get("components", []):
-                try:
-                    module = importlib.import_module(comp_data["module"])
-                    cls = getattr(module, comp_data["class"])
-                    vars_data: dict = comp_data.get("vars", {})
-
-                    if issubclass(cls, Behavior):
-                        if cls.init_method is None:
-                            behavior = cls(game_object)
-                            for var_name, value in vars_data.items():
-                                setattr(behavior, var_name, value)
-                            behavior.enabled = comp_data.get("active", True)
-                            scripts.append(behavior)
-
-                            if not self.active_camera and isinstance(behavior, Camera) and behavior.enabled:
-                                self.active_camera = behavior
-                        else:
-                            behavior = cls.init_method(*vars_data, game_object)
-
-                            behavior.enabled = comp_data.get("active", True)
-                            scripts.append(behavior)
-                            
-                    else:
-                        Logger("CORE").log_warning(
-                            f"Script {cls.__name__} is not a subclass of Behavior and cannot be applied to {object_name}!"
-                        )   
-
-                except:
-                    continue
+            instantiate_scripts(game_object, obj_data.get("components", []))
 
             game_object.add_components(*scripts)
 
@@ -269,11 +282,11 @@ class SceneManager:
 
         return scene_objects
 
-    def load_scene(self, scene_name: str):
+    def load_scene(self, scene_name: str, alert_scripts: bool = True):
         scene_index = list(self.scenes.keys()).index(scene_name)
-        self.load_scene_index(scene_index)
+        self.load_scene_index(scene_index, alert_scripts)
 
-    def load_scene_index(self, scene_index: int):
+    def load_scene_index(self, scene_index: int, alert_scripts: bool = True):
         scene_name = list(self.scenes.keys())[scene_index]
         scene_path = self.scenes[scene_name]
 
@@ -281,9 +294,9 @@ class SceneManager:
 
         # Call unload callbacks on current scene before switching
         scene_info = SceneInfo(scene_name, scene_index)
-        for obj in self.game_objects:
-            for script in obj.components:
-                if not self.editor:
+        if alert_scripts:
+            for obj in self.game_objects:
+                for script in obj.components:
                     script.on_scene_unload(scene_info)
 
         # Load new scene objects
@@ -297,9 +310,9 @@ class SceneManager:
         Logger("SCENE MANAGEMENT").log_debug(f"Loaded gameobjects for scene {scene_info.scene_name}|{scene_info.scene_index}")
 
         # Call load callbacks
-        for obj in self.game_objects:
-            for script in obj.components:
-                if not self.editor:
+        if alert_scripts:
+            for obj in self.game_objects:
+                for script in obj.components:
                     script.on_scene_load(scene_info)
 
     def get_objects_with_component(self, component_class) -> list[Object]:
@@ -331,68 +344,53 @@ class SceneManager:
 
         return {None: tree}
 
+    def render_scene(self, view: glm.mat4x4, proj: glm.mat4x4, view_pos: glm.vec3):
+        for shader in self.shaders.values():
+            shader.set_point_lights()
+            shader.set_spot_lights()
+
+            shader.set_vec3("uViewPos", view_pos)
+            shader.set_bool("uDisableLighting", self.disable_lighting)
+
+            shader.set_mat4("uView", view)
+            shader.set_mat4("uProjection", proj)
+
+        # Rendering
+        for obj in self.game_objects:
+            obj.pre_render()
+
+        for obj in self.game_objects:
+            obj.render()
+
+        for obj in self.game_objects:
+            obj.post_render()
 
     def update_scene(self):
         time = glfw.get_time()
         dt = time - self.last_time
         self.last_time = time
         self.accumulator += dt
-
+        
         for _, components in Behavior.component_category_registry.items():
             for component in components:
                 component.on_frame_start()
 
-        if self.active_camera and not self.editor:
-            camera = self.active_camera
-            view = glm.lookAt(
-                camera.position_mod + camera.gameobject.transform.pos, 
-                camera.position_mod + camera.gameobject.transform.pos + glm.vec3(0, 0, 1) * (camera.rotation_mod * camera.gameobject.transform.rot), 
-                glm.vec3(0, 1, 0) * (camera.rotation_mod * camera.gameobject.transform.rot)
-            )
-            width, height = glfw.get_window_size(glfw.get_current_context())
-            proj = glm.perspective(glm.radians(60), width/height, 0.01, 1000)
+        if self.active_camera:
+            view = self.active_camera.get_view_mat()
+            proj = self.active_camera.get_projection_mat()
 
-            view_pos = self.active_camera.gameobject.transform.pos
+            view_pos = self.active_camera.get_view_pos()
 
-        elif not self.editor:
+        else:
             view = glm.lookAt(glm.vec3(0, 0, 0), glm.vec3(0, 0, 5), glm.vec3(0, 1, 0))
             width, height = glfw.get_window_size(glfw.get_current_context())
             proj = glm.perspective(glm.radians(60), width/height, 0.01, 1000)
             
             view_pos = glm.vec3(0, 0, 0)
-
-        else:
-            if Input().get_key_down(KeyCodes.k_Z):
-                self.editor_camera_active = not self.editor_camera_active
-            
-            if self.editor_camera_active:
-                self.editor_camera.update(dt)
-
-            view = self.editor_camera.get_view_matrix()
-            proj = self.editor_camera.get_projection_matrix()
-            
-            view_pos = self.editor_camera.position
-
-        pointlights = []
-        spotlights = []
-        for light_object in self.get_objects_with_component(Pointlight):
-            light: Pointlight = light_object.get_component(Pointlight)
-            pointlights.append(light)
-
-        for light_object in self.get_objects_with_component(Spotlight):
-            light: Spotlight = light_object.get_component(Spotlight)
-            spotlights.append(light)
-        
-        for shader in self.shaders.values():
-            shader.set_point_lights(pointlights)
-            shader.set_spot_lights(spotlights)
-
-            shader.set_vec3("uViewPos", view_pos)
-
-            shader.set_bool("uDisableLighting", self.disable_lighting)
+        self.render_scene(view, proj, view_pos)
 
         for obj in self.game_objects:
-            obj.update(dt, view, proj)
+            obj.update(dt)
 
         while self.accumulator >= 1/50:
             for obj in self.game_objects:
@@ -403,11 +401,7 @@ class SceneManager:
             for component in components:
                 component.on_frame_end()
 
-    def save(self):
-        if not self.editor:
-            Logger("EDITOR").log_warning("You can't save scenes when not in the editor!")
-            return
-        
+    def save(self):        
         scene_path = self.scenes[self.cur_scene]
 
         hierarchy: dict[Object, dict] = self.get_hierarchy()[None]
@@ -477,10 +471,6 @@ class SceneManager:
             }, scene_file)
 
     def save_scene_indices(self):
-        if not self.editor:
-            Logger("EDITOR").log_warning("You can't save scene indices when not in the editor!")
-            return
-
         for idx, scene in enumerate(self.scenes.values()):
             with open(scene, "r+") as scenefile:
                 data = json.load(scenefile)

@@ -3,13 +3,17 @@ import numpy as np
 
 import glfw
 
-from . import get_modules
+from . import get_modules as modules
 
-Input = get_modules.Input
-KeyCodes = get_modules.KeyCodes
+Input = None
+KeyCodes = None
 
 class editor_camera:
-    def __init__(self):                    
+    def __init__(self, input_handler):       
+        global KeyCodes, Input
+        KeyCodes = modules.KeyCodes
+        Input = modules.Input
+
         self.offset = glm.vec3(0.0, 0.0, 0.0)
         self.front = glm.vec3(0.0, 0.0, -1.0)
         self.up = glm.vec3(0.0, 1.0, 0.0)
@@ -25,6 +29,7 @@ class editor_camera:
         self.update_vectors()
 
         self.window = glfw.get_current_context()
+        self.input_handler = input_handler
 
     def update_vectors(self):
         front = glm.vec3()
@@ -69,13 +74,16 @@ class editor_camera:
 
         self.update_vectors()
 
-    def get_view_matrix(self):
+    def get_view_mat(self):
         """ Returns the view matrix calculated using Euler Angles and the LookAt Matrix """
         return glm.lookAt(self.position, self.position + self.front, self.up)
     
-    def get_projection_matrix(self):
+    def get_projection_mat(self):
         """ Returns the projection matrix using perspective projection. """
         window_ = glfw.get_current_context()
         aspect_ratio = glfw.get_window_size(window_)[0] / glfw.get_window_size(window_)[1]
 
         return glm.perspective(glm.radians(self.zoom), aspect_ratio, 0.1, 100.0)
+    
+    def get_view_pos(self):
+        return self.position

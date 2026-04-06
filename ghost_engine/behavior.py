@@ -1,7 +1,5 @@
 from __future__ import annotations
-
 from .core.logger import Logger
-import sys
 
 def register_editor_button(func):
     Behavior.editor_button_registry.append(func)
@@ -50,8 +48,6 @@ class Behavior:
     
     editor_button_registry = []
 
-    run_in_editor = False
-
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
 
@@ -64,6 +60,10 @@ class Behavior:
         Behavior.component_category_registry[cls.category].append(cls)
         
     def __init__(self, gameobject):
+        try:
+            super().__init__(gameobject)
+        except:
+            super().__init__()
         from .object import Object
         self.__gameobject: Object = gameobject
         self.__enabled = True
@@ -91,6 +91,7 @@ class Behavior:
         from .core.window import Window
         return Window()
     
+    # Frame methods
     @classmethod
     def on_frame_start(cls):
         """
@@ -105,6 +106,7 @@ class Behavior:
         """
         pass
     
+    # Update methods
     def update(self, dt:float):
         """
             Runs every tick.
@@ -119,6 +121,26 @@ class Behavior:
         """
         pass
 
+    # Rendering methods
+    def pre_render(self):
+        """
+            Called before rendering any objects, used by the mesh class to set up VBO's/VAO's.
+        """
+        pass
+
+    def on_render(self):
+        """
+            Called during SceneManager.render_scene(); used by the mesh class to render meshes.
+        """
+        pass
+
+    def post_render(self):
+        """
+            Called after rendering all objects.
+        """
+        pass
+
+    # Scene methods
     def on_scene_load(self, scene_info):
         """
             Called when the scene loads!
@@ -135,6 +157,7 @@ class Behavior:
         """
         pass
 
+    # Collision / Trigger methods
     def on_collision_start(self, other):
         """
         Called upon a collision 'starting', or the first collision between two gameobjects.

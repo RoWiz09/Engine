@@ -43,33 +43,36 @@ class Object:
             else:
                 Logger("CORE").log_error(f"Object of type {type(comp).__name__} is not a Behavior.")
 
-    @property
-    def transform(self):
-        return self.__transform
+    # Rendering
+    def pre_render(self):
+        list(map(lambda s: s.pre_render(), self.components))
 
-    def update(self, dt, view, proj):
+    def render(self):
+        self.mat.use()
+        list(map(lambda s: s.on_render(), self.components))
+
+    def post_render(self):
+        list(map(lambda s: s.post_render(), self.components))
+
+    def set_material(self, mat:Material):
+        self.mat = mat
+        return self
+    
+    # Updates
+    def update(self, dt):
         if self.enabled:
-            self.mat.use()
-            self.mat.shader.set_mat4("uView", view)
-            self.mat.shader.set_mat4("uProjection", proj)
             for component in self.components:
                 if not component.enabled:
                     continue
 
-                if sys.argv[-1] == "--editor" and not component.run_in_editor:
-                    continue
-
                 component.update(dt)
-    
-    def set_material(self, mat:Material):
-        self.mat = mat
-        return self
 
     def fixed_update(self):
         for component in self.components:
             if component.enabled:
                 component.fixed_update()
 
+    # Components
     def get_component(self, component_class: T) -> type[T]:
         for component in self.components:
             if isinstance(component, component_class) and component.enabled:
@@ -96,6 +99,11 @@ class Object:
             component._gameobject = self
             self.components.append(component)
 
+    # Properties
+    @property
+    def transform(self):
+        return self.__transform
+    
     @property
     def enabled(self) -> bool:
         if self.__transform.parent is None:
@@ -118,17 +126,17 @@ class Object:
             Logger("CORE").log_warning(f"{type(state).__name__} is not of type bool")
             return self
     
-    # -- GET CHILD METHODS --
+    # Get Children methods
     def get_child_by_name(self, name: str):
         for child in self.children:
             if child.name == name:
                 return child
     
     def get_children_by_name(self, name: str, limit=-1):
-        out = []
+        out = set()
         for child in self.children:
             if child.name == name:
-                out.append(child)
+                out.add(child)
                 if len(out) == limit:
                     return out
                 
@@ -139,3 +147,15 @@ class Object:
             for component in child.components:
                 if isinstance(component, component_class):
                     return child
+                
+    def get_children_with_component(self, component_class: T) -> list[Object]:
+        def has_component(obj):
+            for comp in obj:
+                if isinstance(comp, component_class):
+                    return obj
+        
+        objects = set()
+        for obj in self.children:
+            if has_component(obj):
+                objects.add(obj)
+    

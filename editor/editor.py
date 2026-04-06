@@ -4,13 +4,16 @@ from typing_extensions import overload
 from systems.argument_parser import ArgumentParser
 # from systems.editor_windows import *
 
-import glfw
+import glfw, time
 import os, OpenGL.GL as gl
 
+from systems.editor_camera import editor_camera
+
 from systems.window_drawer import WindowDrawer, EditorUiWindow
-from systems.get_modules import get_modules
+from systems import get_modules as modules
 
 import json
+import sys
 
 glfw_initalized = False
 
@@ -68,11 +71,14 @@ class Window:
         compiled = not os.path.isfile(".rproj") # If there is a .rproj file, then the project has not been built yet.
         if compiled:
             self.logger.log_fatal("Unable to edit a compiled game!")
+            sys.exit()
+
         else:
             with open(".rproj") as project_file:
                 self.project_data = json.load(project_file)
             os.environ["project"] = name
         self.scene_manager = SceneManager()
+        self.scene_manager.load_scene_index(0, alert_scripts = False)
 
         Window._created = True
 
@@ -82,20 +88,38 @@ class Window:
         self.drawer = WindowDrawer()
         self.drawer.add_window_data(EditorUiWindow("WOW!").resize(50, 50).move(50, 50))
 
+        self.editor_cam = editor_camera(self.input_handler)
+        self.moving_camera = False
+
+        self.last_time = glfw.get_time()
+
     def should_close(self):
         return glfw.window_should_close(self.window)
 
     def update(self):
-        glfw.poll_events()
+        cur_time = glfw.get_time()
+        dt = cur_time - self.last_time
+        self.last_time = cur_time
 
+        glfw.poll_events()
         self.input_handler.get_inputs(self.window)
 
-        gl.glViewport(0, 0, *glfw.get_window_size(self.window))
+        if self.input_handler.get_key_down(KeyCodes.k_Z):
+            self.moving_camera = not self.moving_camera
 
+        # Set up for a new frame
+        gl.glViewport(0, 0, *glfw.get_window_size(self.window))
         gl.glClear(gl.GL_DEPTH_BUFFER_BIT | gl.GL_COLOR_BUFFER_BIT)
 
-        self.scene_manager.update_scene()
+        if self.moving_camera:
+            self.editor_cam.update(dt)
 
+        # Rendering
+        self.scene_manager.render_scene(
+            self.editor_cam.get_view_mat(), 
+            self.editor_cam.get_projection_mat(), 
+            self.editor_cam.get_view_pos()
+        )
         self.__render_editor_ui()
 
         glfw.swap_buffers(self.window)
@@ -119,13 +143,15 @@ arg_parser.parse()
 
 def get_path(location: str):
     if not location.endswith(".rproj") and os.path.exists(location):
-        raise ValueError("Executable argument project-path is",
-                         "pointing to an invalid or missing project!")
+        raise ValueError("Executable argument project-path is" +
+                         " pointing to an invalid or missing project!")
     
     return os.path.split(location)[0]
 
 base_path = get_path(arg_parser.get_arg("project-path"))
-Logger, SceneManager, Input = get_modules(base_path)
+os.chdir(base_path)
+Logger, SceneManager, Input = modules.get_modules(base_path)
+KeyCodes = modules.KeyCodes
 
 window = Window(base_path)
 while not window.should_close():

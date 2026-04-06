@@ -245,7 +245,7 @@ class Mesh(Behavior):
 
         self.submeshes = submeshes
     
-    def update(self, dt):
+    def on_render(self):
         if not self.enabled:
             return
         

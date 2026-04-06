@@ -8,9 +8,6 @@ from .input import Input
 import glfw
 import sys, os, OpenGL.GL as gl
 
-from imgui.integrations.glfw import GlfwRenderer
-import imgui
-
 glfw_initalized = False
 
 def glfw_error_handler(e_code:str, desc:str):
@@ -69,6 +66,7 @@ class Window:
                 name = name[:-2]
             os.environ["project"] = name
         self.scene_manager = SceneManager()
+        self.scene_manager.load_scene_index(0)
 
         Window._created = True
 

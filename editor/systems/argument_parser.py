@@ -9,8 +9,6 @@ class Argument:
         self.arg_name = arg_name
         self.optional = kwds.get("optional", False) or arg_name.startswith("--")
 
-        print(self.arg_name, self.optional)
-
 class ArgumentParser:
     def __init__(self):
         self.args: list[Argument] = []

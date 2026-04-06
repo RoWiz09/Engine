@@ -22,8 +22,6 @@ class WindowDrawer:
         if WindowDrawer.INITALIZED:
             return
         
-        print("WOW!!")
-        
         setup()
         self.windows: set[EditorUiWindow] = set()
 
@@ -40,15 +38,15 @@ class WindowDrawer:
         self.windows.add(window_data)
 
 WINDOW_SHADER = None
-VAO = None
+VBO, VAO, EBO = None, None, None
 def setup():
-    global WINDOW_SHADER, VAO
+    global WINDOW_SHADER, VBO, VAO, EBO
     WINDOW_SHADER = ShaderProgram(
         """
             #version 330 core
 
             layout (location = 0) in vec2 aPos;
-            layout (location = 0) in vec2 aTexCoords;
+            layout (location = 1) in vec2 aTexCoords;
 
             uniform mat4 uModel;
             uniform mat4 uProjection;
@@ -93,18 +91,24 @@ def setup():
     gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, ebo)
     gl.glBufferData(gl.GL_ELEMENT_ARRAY_BUFFER, indices.nbytes, indices, gl.GL_STATIC_DRAW)
 
-    stride = 8 # 2 Floats * 4 Bytes = 8
+    stride = 16 # 4 Floats * 4 Bytes = 16
 
     gl.glEnableVertexAttribArray(0)
     gl.glVertexAttribPointer(0, 2, gl.GL_FLOAT, gl.GL_FALSE, stride, gl.ctypes.c_void_p(0))
 
+    gl.glEnableVertexAttribArray(1)
+    gl.glVertexAttribPointer(1, 2, gl.GL_FLOAT, gl.GL_FALSE, stride, ctypes.c_void_p(2 * 4))
+
     VAO = vao
+    VBO = vbo
+    EBO = ebo
 
 class EditorUiWindow:
     def __init__(self, name: str):
         self.name = name
 
         self.draw_data = WindowDrawData(0, 0, 5, 5)
+        self.ui_elements = []
 
     def get_draw_data(self):
         return self.draw_data

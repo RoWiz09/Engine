@@ -1,6 +1,6 @@
 from OpenGL.GL import *
 from ..core.logger import Logger
-from ..light import Pointlight, Spotlight
+from .light_type import LightType, LightTypes
 from pyglm import glm
 import numpy as np
 import ctypes
@@ -177,7 +177,8 @@ class ShaderProgram:
             glUniform1i(loc, int(value))
 
     @_use_shader
-    def set_point_lights(self, lights: list[Pointlight]):
+    def set_point_lights(self):
+        lights = LightType.lights[LightTypes.POINT]
         glUniform1i(
             glGetUniformLocation(self.program_id, "uNumPointLights"),
             len(lights)
@@ -213,7 +214,9 @@ class ShaderProgram:
         glBindBuffer(GL_UNIFORM_BUFFER, 0)
 
     @_use_shader
-    def set_spot_lights(self, lights: list[Spotlight]):
+    def set_spot_lights(self):
+        lights = LightType.lights[LightTypes.SPOT]
+
         glUniform1i(
             glGetUniformLocation(self.program_id, "uNumSpotLights"),
             len(lights)
