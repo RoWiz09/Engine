@@ -36,7 +36,7 @@ class InitMethod:
 
 class Behavior:
     """
-    The basic behavior class all scripts should inherit from. Exposes methods for:\n
+    The basic class all scripts should inherit from. Exposes methods for:\n
     - __init__(self, gameobject): basic script initalization
     - on_frame_start/end: Class methods called upon the start or end of a frame respectively
     - on_collision (start and end): Methods called upon collisions

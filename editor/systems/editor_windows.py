@@ -1,478 +1,111 @@
-from __future__ import annotations
+import OpenGL.GL as gl
 
-from ghost_engine.core.scene_manager import SceneManager
+from .window_drawer import *
+from . import get_modules
 
-from ghost_engine.object import Object
-from ghost_engine.behavior import Behavior, EditorField
+import sys
 
-from ghost_engine.core import transform
-
-from ghost_engine.core.logger import Logger
-
-from ghost_engine.build import build_game
-from pyglm import glm
-
-from . import window_drawer
-import json
-import os
-
-menu_registry: dict[str, list[EditorWindow]] = {}
-def register_menu(name: str):
-    global menu_registry
-
-    menu_registry[name] = []
-
-register_menu("File")
-register_menu("View")
-register_menu("Scene")
-register_menu("Other")
-
-class EditorWindow:
-    menu = None
-    allow_multiple = False
-    keybind = ""
-
-    INSTANCES = []
-    def __init_subclass__(cls: object):
-        if cls.menu in menu_registry:
-            menu_registry[cls.menu].append(cls)
-
-    @classmethod
-    def create(cls, *args):
-        if cls.allow_multiple:
-            res = cls.handle_multiple(*args)
-
-            if not res:
-                return None
-            
-        return cls(*args)
-
-    def render(self, special_id = "") -> bool:
-        imgui.push_style_var(imgui.STYLE_WINDOW_PADDING, (5, 5))
-        id_ = type(self).__name__
-        if special_id != "":
-            id_ = special_id
-        window = imgui.begin(type(self).__name__ + "###" + id_, True, flags=imgui.WINDOW_ALWAYS_AUTO_RESIZE|imgui.WINDOW_NO_RESIZE)
-        imgui.pop_style_var(imgui.STYLE_WINDOW_PADDING)
-        if not window.opened:
-            imgui.end()
-            return None
-
-        return window
-    
-    @classmethod
-    def handle_multiple(cls, *args):
-        return True
-    
-    def destroy(self):
-        self.__class__.INSTANCES.remove(self)
-
-class Hierarchy(EditorWindow):
-    menu = "Scene"
-    keybind = "Ctrl+H"
-    allow_multiple = False
-
-    def render(self) -> Object | None:
-        window = super().render()
-        if not window:
-            return True
-
-        obj_id = 0
-        
-        from ghost_engine.core.window import Window
-        with window:
-            width = 200
-
-            if imgui.button("Create New Object", width):
-                SceneManager().game_objects.append(Object("New Gameobject", SceneManager().materials["base_mat"], transform.Transform()))
-
-            hierarchy = SceneManager().get_hierarchy()[None]
-            
-            for obj, children in hierarchy.items():
-                imgui.push_id(str(obj_id))
-                if imgui.button(obj.name, width):
-                    inspector = Inspector.create(obj)
-                    if inspector:
-                        Window().open_editor_window(inspector)
-                imgui.pop_id()
-
-                obj_id += 1
-
-                steps = {}
-                child_idx = 0
-                cur_children: dict = children
-                while True:
-                    if child_idx < len(cur_children):
-                        child_obj = list(cur_children.keys())[child_idx]
-
-                        imgui.set_cursor_pos_x(20 * (len(steps) + 1) + 8)
-                        imgui.push_id(str(obj_id))
-                        if imgui.button(child_obj.name, width - 20 * (len(steps) + 1) - 5):
-                            inspector = Inspector.create(child_obj)
-                            if inspector:
-                                Window().open_editor_window(inspector)
-
-                        imgui.pop_id()
-
-                        child_idx += 1
-                        obj_id += 1
-
-                        if cur_children[child_obj] != {}:
-                            steps[obj] = (cur_children, child_idx)
-                            cur_children = cur_children[child_obj]
-                            child_idx = 0
-
-                    else:
-                        if len(steps) == 0:
-                            break
-
-                        else:
-                            cur_children, child_idx = list(steps.values())[-1]
-                            steps = dict(list(steps.items())[:-1])
-        return False
-
-class Inspector(EditorWindow):
-    allow_multiple = True
-
-    @classmethod
-    def handle_multiple(cls, *args):
-        object_ = args[0]
-
-        for inst in cls.INSTANCES:
-            if inst.object == object_:
-                return False
-            
-        return True
-
-    def __init__(self, object_: Object):
-        self.__class__.INSTANCES.append(self)
-        self.object: Object = object_
-        self.cur_comp_category = None
-
-    def render(self):
-        if self.object is None:
-            Logger("EDITOR").log_error("An inspector is missing an object! How did that happen?!")
-            return True
-        
-        window = super().render(str(self.object))
-        if not window:
-            return True
-        
-        with window:
-            width = imgui.get_window_width()
-            changed, value = imgui.input_text_with_hint("Name:", "Object Name", self.object.name)
-            imgui.same_line()
-            imgui.set_cursor_pos_x(width - 40)
-            changed2, val = imgui.checkbox("", self.object.enabled)
-            if changed or changed2:
-                self.object.name = value
-                self.object.enabled = val
-
-            # Transform
-            changed, values = imgui.drag_float3("Position:", *self.object.transform.localpos)
-            if changed:
-                self.object.transform.localpos = glm.vec3(values)
-
-            changed, values = imgui.drag_float3("Rotation:", *self.object.transform.localrot)
-            if changed:
-                self.object.transform.localrot = glm.vec3(values)
-
-            changed, values = imgui.drag_float3("Scale:", *self.object.transform.scale)
-            if changed:
-                self.object.transform.scale = glm.vec3(values)
-
-            var_id = 0
-            component_ids = {}
-            for component in self.object.components.copy():
-                imgui.separator()
-                
-                if not type(component) in component_ids.keys():
-                    component_ids[type(component)] = 1
-
-                imgui.begin_child(type(component).__name__ + " " + str(component_ids[type(component)]), width = 280, height = 100, border = True, flags=imgui.WINDOW_NO_SCROLLBAR)
-                component_ids[type(component)] += 1
-
-                imgui.text(type(component).__name__)
-                imgui.same_line()
-                imgui.set_cursor_pos_x(280 - 80)
-                imgui.push_id(str(var_id))
-                if imgui.button("Options", 80):
-                    imgui.open_popup("CompOpt")
-
-                with imgui.begin_popup("CompOpt") as comp_popup:
-                    if comp_popup:
-                        component.enabled = imgui.checkbox("Enabled", component.enabled)[1]
-                        if imgui.button("Remove", 100):
-                            self.object.components.remove(component)
-
-                imgui.pop_id()
-                var_id += 1
-                
-                # Editor Fields
-                for var_name, field in vars(type(component)).items():
-                    imgui.push_id(str(var_id))
-                    if isinstance(field, EditorField):
-                        value = getattr(component, var_name)
-                        
-                        field_type = field.type.lower()
-                        if field_type == "bool":
-                            changed, val = imgui.checkbox(var_name, value)
-                        elif field_type == "int":
-                            changed, val = imgui.input_int(var_name, value)
-                        elif field_type == "float":
-                            changed, val = imgui.input_float(var_name, value)
-                        elif field_type == "vec3":
-                            changed, vals = imgui.input_float3(var_name, *value)
-                            val = glm.vec3(vals) if changed else value
-                        elif field_type == "str":
-                            changed, val = imgui.input_text(var_name, value)
-                        else:
-                            changed = False
-                            val = value
-
-                        if changed:
-                            setattr(component, var_name, val)
-
-                    elif field in Behavior.editor_button_registry:
-                        if imgui.button(var_name, imgui.get_window_width()):
-                            getattr(component, var_name)()
-
-                    imgui.pop_id()
-                    var_id += 1
-                
-                imgui.end_child()
-
-            imgui.separator()
-            if imgui.button("Add Component"):
-                imgui.open_popup("Components")
-
-            with imgui.begin_popup("Components") as comp_popup:
-                if comp_popup:
-                    if self.cur_comp_category is None:
-                        for name in Behavior.component_category_registry.keys():
-                            if name is None:
-                                Logger("EDITOR").log_warning("Script category cannot be None!")
-                            elif imgui.button(name, 100):
-                                self.cur_comp_category = name
-
-                    else:
-                        if imgui.button("Back", 100):
-                            self.cur_comp_category = None
-                            return False
-
-                        for script in Behavior.component_category_registry[self.cur_comp_category]:
-                            if imgui.button(script.__name__, 100):
-                                self.object.add_component(script(self.object))
-                                self.cur_comp_category = None
-                                imgui.close_current_popup()
-
-        return False
-    
-class Gizmos(EditorWindow):
-    menu = "Other"
-
-    def render(self):
-        window = super().render()
-        if not window:
-            return True
-        
-        with window:        
-            changed, state = imgui.checkbox("Use Lights", not SceneManager().disable_lighting)
-            if changed:
-                SceneManager().disable_lighting = not state
-
-class Scenes(EditorWindow):
-    menu = "File"
-
-    def __init__(self):
-        self.selected_scene = None
-        self.new_scene_name = ""
-        super().__init__()
-
-    def render(self):
-        window = super().render()
-
-        if not window:
-            return True
-
-        with window:
-            if imgui.button("Create New Scene", 300):
-                imgui.open_popup("SceneMenu")
-            
-            with imgui.begin_popup("SceneMenu") as popup:
-                if popup:
-                    changed, value = imgui.input_text_with_hint("", "Scene Name:", self.new_scene_name)
-                    if changed:
-                        self.new_scene_name = value
-
-                    if imgui.button("Create", 200):
-                        path = os.path.join("assets", os.environ["project"], self.new_scene_name + ".rscene")
-                        with open(path, "w") as new_scene_file:
-                            index = len(SceneManager().scenes)
-                            data = {
-                                "scene_index": index,
-                                "objects": []
-                            }
-                            
-                            json.dump(data, new_scene_file)
-                        
-                        SceneManager().scenes[self.new_scene_name] = path
-                        imgui.close_current_popup()
-                        self.new_scene_name = ""
-
-            scenes = list(SceneManager().scenes.keys())
-
-            with imgui.begin_child("scenes", 300, 100, border=True, flags=imgui.WINDOW_NO_SCROLLBAR):
-                for idx, scene in enumerate(scenes):
-                    with imgui.begin_child(scene, 284, 40, border=True, 
-                                           flags = imgui.WINDOW_NO_SCROLLBAR 
-                                           | imgui.WINDOW_NO_SCROLL_WITH_MOUSE):
-                        imgui.text(scene)
-
-                        imgui.same_line()
-                        imgui.set_cursor_pos_x(195)
-                        if imgui.button("Options", 60):
-                            self.selected_scene = scene
-
-                        imgui.set_cursor_pos((260, 0))
-                        imgui.push_id(str(idx))
-                        if imgui.arrow_button("Decrease", imgui.DIRECTION_UP):
-                            if idx != 0:
-                                new_idx = idx - 1
-
-                                new_scenes_list = list(SceneManager().scenes.items())
-                                new_scenes_list.insert(new_idx, new_scenes_list[idx])
-                                new_scenes_list.pop(idx + 1)
-
-                                SceneManager().scenes = dict(new_scenes_list)
-                                SceneManager().save_scene_indices()
-                            
-                        imgui.set_cursor_pos((260, 20))
-                        if imgui.arrow_button("Increase", imgui.DIRECTION_DOWN):
-                            if idx != len(SceneManager().scenes) - 1:
-                                new_idx = idx + 2
-
-                                new_scenes_list = list(SceneManager().scenes.items())
-                                new_scenes_list.insert(new_idx, new_scenes_list[idx])
-                                new_scenes_list.pop(idx)
-
-                                SceneManager().scenes = dict(new_scenes_list)
-                                SceneManager().save_scene_indices()
-
-                        imgui.pop_id()
-                    
-            if self.selected_scene:
-                imgui.text("Scene ID: " + str(list(SceneManager().scenes.keys()).index(self.selected_scene)))
-                
-                imgui.same_line()
-                imgui.set_cursor_pos_x(220)
-                if imgui.button("Load", 80):
-                    SceneManager().load_scene(self.selected_scene)
-
-class Freecam(EditorWindow):
-    menu = "Other"
-
-    def render(self):
-        window = super().render()
-        if not window:
-            return True
-
-        with window:
-            changed, value = imgui.slider_float("Camera Speed", SceneManager().editor_camera.speed, 0.5, 20)
-            if changed:
-                SceneManager().editor_camera.speed = value
-            changed, value = imgui.slider_float("Camera FOV", SceneManager().editor_camera.zoom, 40, 80)
-            if changed:
-                SceneManager().editor_camera.zoom = value
-
-class FileViewer(EditorWindow):
-    allow_multiple = True
-
-    @classmethod
-    def handle_multiple(cls, *args):
-        file = args[0]
-
-        for inst in cls.INSTANCES:
-            if inst.file == file:
-                return False
-            
-        return True
-    
-    def __init__(self, file_path):
-        super().__init__()
-        type(self).INSTANCES.append(self)
-
-        self.file = file_path
-
-    def render(self):
-        window = super().render()
-        if not window:
-            return True
-
-        with window:
-            changed, value = imgui.input_text("File:", self.file)
-            if changed:
-                os.rename(self.file, value)
-                self.file = value
-
-class Files(EditorWindow):
-    menu="View"
-
+class SceneView(EditorUiWindow):
+    name = "Scene"
     def __init__(self):
         super().__init__()
 
-        self.selected_directory = []
+        self.fbo = gl.glGenFramebuffers(1)
 
-    def render(self):
-        from ghost_engine.core.window import Window
+        self.view = UiElement(self, 0, 0)
+        self.view.resize_callback = self.view_resize_callback
 
-        window = super().render()
-        if not window:
-            return True
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.fbo)
+        gl.glFramebufferTexture2D(gl.GL_READ_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0, gl.GL_TEXTURE_2D, self.view.texture, 0)
+
+        self.rbo = gl.glGenRenderbuffers(1)
+        gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, self.rbo)
+        gl.glRenderbufferStorage(gl.GL_RENDERBUFFER, gl.GL_DEPTH_COMPONENT24, int(self.view.size.x), int(self.view.size.y))
+        gl.glFramebufferRenderbuffer(gl.GL_FRAMEBUFFER, gl.GL_DEPTH_ATTACHMENT, gl.GL_RENDERBUFFER, self.rbo)
+        gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, 0)
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
+
+    def view_resize_callback(self, view: UiElement):
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.fbo)
+        gl.glFramebufferTexture2D(gl.GL_READ_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0, gl.GL_TEXTURE_2D, self.view.texture, 0)
+
+        gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, self.rbo)
+        gl.glRenderbufferStorage(gl.GL_RENDERBUFFER, gl.GL_DEPTH_COMPONENT24, int(self.view.size.x), int(self.view.size.y))
+        gl.glFramebufferRenderbuffer(gl.GL_FRAMEBUFFER, gl.GL_DEPTH_ATTACHMENT, gl.GL_RENDERBUFFER, self.rbo)
+        gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, 0)
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
+
+    def draw(self, editor):
+        window = glfw.get_current_context()
+        size = glfw.get_window_size(window)
+
+        gl.glViewport(0, 0, int(self.view.size.x), int(self.view.size.y))
+        editor.render_scene(self.fbo)
+        gl.glViewport(0, 0, *size)
         
-        with window:
-            base_path = os.path.join(".", "assets", *self.selected_directory)
-            if len(self.selected_directory) > 0:
-                state = imgui.button("...", width=200)
-                if state:
-                    self.selected_directory = self.selected_directory[:-1]
+        super().draw(editor)   
 
-            for path in os.listdir(base_path):
-                if path.startswith("__"):
-                    continue
+    def resize(self, new_width, new_height):
+        super().resize(new_width, new_height)     
+        self.view.resize_to_fill_window()
 
-                state = imgui.button(path, width=200)
-                if state:
-                    path_ = os.path.join(base_path, path)
-                    if os.path.isdir(path_):
-                        self.selected_directory.append(path)
+        text_img = render_window_label(self.name, int(self.draw_data.size.x))
+        self.text_img_size = text_img.size
+        gl.glBindTexture(gl.GL_TEXTURE_2D, self.name_texture)
+        gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA, *self.text_img_size, 0, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, text_img.tobytes())
+        gl.glBindTexture(gl.GL_TEXTURE_2D, 0)
 
-                    elif os.path.isfile(path_):
-                        file_view = FileViewer(path_)
-                        if file_view:
-                            Window().open_editor_window(file_view)
+        return self
+    
+class Hierarchy(EditorUiWindow):
+    name = "Hierarchy"
+    def __init__(self):
+        super().__init__()
 
-class MenuObject:
-    menu = None
-    keybind = ""
+        self.draw_data.padding.x = 5
+        self.draw_data.padding.y = 5
 
-    def __init_subclass__(cls: object):
-        if cls.menu in menu_registry:
-            menu_registry[cls.menu].append(cls)
+        self.manager = get_modules.SceneManager()
+        self.object_buttons: list[Button] = set()
 
-    def on_click():
+        self.object_type = None
+        self.create_object_button: Button = Button(self, 100, 30, "Create Gameobject", self.create_object)
+
+    def create_object(self):
+        if not self.object_type:
+            self.object_type = getattr(sys.modules["ghost_engine.object"], "Object")
+        
+        new_obj = self.object_type("New GameObject", self.manager.materials["base_mat"])
+        self.manager.game_objects.append(new_obj)
+        self.build()
         pass
-    
-class Save(MenuObject):
-    menu = "File"
-    keybind = "Ctrl+S"
-    
-    def on_click():
-        SceneManager().save()
 
-class Build(MenuObject):
-    menu = "File"
-    keybind = "Ctrl+Shift+B"
-    
-    def on_click():
-        build_game()
+    def resize(self, new_width, new_height):
+        orig_window_width = self.draw_data.size.x - self.draw_data.padding.x * 2
+        for button in self.object_buttons:
+            orig_button_width_mod = orig_window_width - button.size.x
+            button.resize(glm.vec2((new_width - self.draw_data.padding.x * 2) - orig_button_width_mod, button.size.y))
+
+        super().resize(new_width, new_height)
+
+    def build(self):
+        if len(self.object_buttons) != len(self.manager.game_objects):
+            self.object_buttons.clear()
+            self.ui_elements.clear()
+
+            self.ui_elements.append(self.create_object_button)
+
+            root_objects = list(filter(lambda object_: object_.transform.parent == None, self.manager.game_objects))
+            def build_layer(objects: list, width):
+                for obj in objects:
+                    button = Button(self, width, 30, obj.name, lambda object_=obj: print(object_.name))
+                    button.pos_offset = glm.vec2((self.draw_data.size.x - self.draw_data.padding.x * 2) - width, 0)
+
+                    build_layer(obj.children, max(80, width-20))
+                    self.object_buttons.add(button)
+
+            build_layer(root_objects, self.draw_data.size.x - self.draw_data.padding.x * 2)
+
+    def draw(self, editor):
+        self.build()
+        super().draw(editor)

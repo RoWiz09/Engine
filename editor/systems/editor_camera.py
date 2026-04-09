@@ -24,7 +24,7 @@ class editor_camera:
         self.yaw = -90
         self.pitch = 0
         self.speed = 5 
-        self.sensitivity = 0.5
+        self.sensitivity = 0.3
         self.zoom = 45.0
         self.update_vectors()
 

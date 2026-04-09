@@ -7,9 +7,15 @@ from systems.argument_parser import ArgumentParser
 import glfw, time
 import os, OpenGL.GL as gl
 
+from pyglm import glm
+
 from systems.editor_camera import editor_camera
 
-from systems.window_drawer import WindowDrawer, EditorUiWindow
+from systems.window_drawer import WindowDrawer
+from systems.window_docker import *
+from systems.editor_windows import *
+
+
 from systems import get_modules as modules
 
 import json
@@ -59,10 +65,10 @@ class Window:
 
         self.logger.log_debug("GLFW initalized successfully!")
 
-        gl.glClearColor(0.25, 0.25, 1, 1)
-
         gl.glEnable(gl.GL_CULL_FACE)
-        gl.glEnable(gl.GL_DEPTH_TEST)
+        # gl.glEnable(gl.GL_DEPTH_TEST)
+        gl.glEnable(gl.GL_BLEND)
+        gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
 
         self.input_handler = Input()
 
@@ -79,27 +85,53 @@ class Window:
             os.environ["project"] = name
         self.scene_manager = SceneManager()
         self.scene_manager.load_scene_index(0, alert_scripts = False)
-
         Window._created = True
 
-        # imgui.create_context()
-        # self.editor_renderer = GlfwRenderer(self.window)
-
         self.drawer = WindowDrawer()
-        self.drawer.add_window_data(EditorUiWindow("WOW!").resize(50, 50).move(50, 50))
+
+        self.docker = Docker()
+        scene_viewer = SceneView()
+        scene_viewer2 = Hierarchy()
+        scene_viewer3 = SceneView()
+        root = self.docker.dock(self.docker.root, scene_viewer, "left")
+        self.docker.dock(root.child_b, scene_viewer2)
+
+        self.drawer.add_window_data(scene_viewer)
+        self.drawer.add_window_data(scene_viewer2)
 
         self.editor_cam = editor_camera(self.input_handler)
         self.moving_camera = False
+
+        self.running_game = False
 
         self.last_time = glfw.get_time()
 
     def should_close(self):
         return glfw.window_should_close(self.window)
 
+    def render_scene(self, frame_buffer = 0):
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, frame_buffer)
+        gl.glEnable(gl.GL_DEPTH_TEST)
+
+        gl.glClearColor(0.25, 0.25, 1, 1)
+        gl.glClear(gl.GL_DEPTH_BUFFER_BIT | gl.GL_COLOR_BUFFER_BIT)
+
+        self.scene_manager.render_scene(
+            self.editor_cam.get_view_mat(), 
+            self.editor_cam.get_projection_mat(), 
+            self.editor_cam.get_view_pos()
+        )
+
+        if frame_buffer != 0:
+            gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
+        gl.glDisable(gl.GL_DEPTH_TEST)
+
     def update(self):
         cur_time = glfw.get_time()
         dt = cur_time - self.last_time
         self.last_time = cur_time
+
+        # print(1/dt)
 
         glfw.poll_events()
         self.input_handler.get_inputs(self.window)
@@ -108,24 +140,25 @@ class Window:
             self.moving_camera = not self.moving_camera
 
         # Set up for a new frame
-        gl.glViewport(0, 0, *glfw.get_window_size(self.window))
+        width, height = glfw.get_window_size(self.window)
+        gl.glViewport(0, 0, width, height)
+
+        gl.glClearColor(0.12, 0.12, 0.12, 1)
         gl.glClear(gl.GL_DEPTH_BUFFER_BIT | gl.GL_COLOR_BUFFER_BIT)
 
         if self.moving_camera:
             self.editor_cam.update(dt)
 
         # Rendering
-        self.scene_manager.render_scene(
-            self.editor_cam.get_view_mat(), 
-            self.editor_cam.get_projection_mat(), 
-            self.editor_cam.get_view_pos()
-        )
+        self.docker.update(self)
         self.__render_editor_ui()
 
         glfw.swap_buffers(self.window)
 
     def __render_editor_ui(self):
-        self.drawer.render()
+        self.drawer.render(self)
+        if not self.moving_camera:
+            self.drawer.handle_input(KeyCodes, MouseButtons, self.input_handler)
 
     def size(self):
         return glfw.get_window_size(self.window)
@@ -151,7 +184,7 @@ def get_path(location: str):
 base_path = get_path(arg_parser.get_arg("project-path"))
 os.chdir(base_path)
 Logger, SceneManager, Input = modules.get_modules(base_path)
-KeyCodes = modules.KeyCodes
+KeyCodes, MouseButtons = modules.KeyCodes, modules.MouseButtons
 
 window = Window(base_path)
 while not window.should_close():

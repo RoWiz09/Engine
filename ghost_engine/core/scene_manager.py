@@ -332,11 +332,10 @@ class SceneManager:
         # find roots first
         roots = [obj for obj in self.game_objects if obj.transform.parent is None]
 
-        def build(node):
+        def build(node: Object):
             children = {}
-            for obj in self.game_objects:
-                if obj.transform.parent and obj.transform.parent.gameobject is node:
-                    children[obj] = build(obj)
+            for obj in node.children:
+                children[obj] = build(obj)
             return children
 
         for root in roots:
