@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Optional, Literal, Any, TypeAlias
 
 from .editor_windows import EditorUiWindow
-from . import get_modules
+from . import get_modules as modules
 
 from pyglm import glm
 from typing import TYPE_CHECKING
@@ -51,8 +51,17 @@ class DockNode:
 
     def split_node(self, node_a: DockNode, node_b: DockNode, split: Split):
         if not self.windows == []:
-            get_modules.Logger("EDITOR").log_warning("Can't split a DockNode that's already associated with a window!")
-            return
+            if node_a.windows == []:
+                node_a.windows = self.windows
+            
+            elif node_b.windows == []:
+                node_b.windows = self.windows
+
+            else:
+                modules.Logger("EDITOR").log_error("A node has failed be split, due to having windows which cannot be distributed!")
+                return
+
+            self.windows = []
 
         self.child_a = node_a
         self.child_a.parent = self
@@ -76,7 +85,7 @@ class DockNode:
             return "child_b"
         
         else:
-            get_modules.Logger("EDITOR").log_warning("Tried to get which child a node was when the node wasn't a child of the parent!")
+            modules.logger("EDITOR").log_warning("Tried to get which child a node was when the node wasn't a child of the parent!")
             return
 
 
@@ -85,9 +94,9 @@ class Docker:
         self.nodes: list[DockNode] = [] 
         self.root = DockNode(self)
 
-    def get_node_info(self, node: DockNode, window: Window):
+    def get_node_info(self, node: DockNode, editor: Window):
         if not node.parent:
-            return glm.vec2(*window.size()), glm.vec2(0, 0)
+            return glm.vec2(*editor.size()), glm.vec2(0, 0)
         
         parent = node.parent
         child_pos = parent.get_child(node)
@@ -114,16 +123,58 @@ class Docker:
             base_size.x *= split_ratio
 
         else:
-            get_modules.Logger("EDITOR").log_error("A module was flagged as invalid, due to it's parent not" + 
+            modules.logger("EDITOR").log_error("A node was flagged as invalid, due to it's parent not" + 
                                                         "having a defined split direction!")
             return None
         
         return base_size, base_pos
+    
+    def set_ratio(self, node: DockNode, ratio: float, editor: Window):
+        if not 0 <= ratio <= 1:
+            modules.logger("EDITOR").log_warning("A node's split ratio was set to be outside of it's range!")
+            return
+        
+        node.split_ratio = ratio
 
-    def compute_node(self, node: DockNode, window: Window):
+        self.compute_node(node, editor)
+
+    def compute_node(self, node: DockNode, editor: Window):
         """
-        Compute a single node. Used when computing the entire layout is unneeded or wasteful, such as when adding a node.
+        Computes a node tree, starting with `node`. Used when computing a whole tree from `root` would be inefficient.
         """
+
+        size, pos = self.get_node_info(node, editor)
+
+        node.est_size = size
+        node.est_pos = pos
+
+        cur_nodes = []
+
+        if node.is_split():
+            cur_nodes.append(node.child_a)
+            cur_nodes.append(node.child_b)
+
+        else:
+            for editor_window in node.windows:
+                editor_window.resize(*node.est_size)
+                editor_window.move(*node.est_pos)
+
+        while len(cur_nodes) > 0:
+            node = cur_nodes.pop(0)
+
+            size, pos = self.get_node_info(node, editor)
+
+            node.est_size = size
+            node.est_pos = pos
+
+            if node.is_split():
+                cur_nodes.append(node.child_a)
+                cur_nodes.append(node.child_b)
+
+            else:
+                for editor_window in node.windows:
+                    editor_window.resize(*node.est_size)
+                    editor_window.move(*node.est_pos)
 
     def compute_layout(self, editor: Window):
         self.root.est_size = glm.vec2(editor.size())
@@ -160,7 +211,7 @@ class Docker:
 
     def dock(self, node: DockNode, window: EditorUiWindow, split: Optional[SplitDirection] = None):
         if not node in self.nodes:
-            get_modules.Logger("EDITOR").log_warning(f"Tried to dock {window.name} in a non-existent node!")
+            modules.logger("EDITOR").log_warning(f"Tried to dock {window.name} in a non-existent node!")
             return
         
         # If there is a split, handle it accordingly
@@ -194,11 +245,11 @@ class Docker:
     
     def undock(self, node: DockNode, window: EditorUiWindow):
         if not node in self.nodes:
-            get_modules.Logger("EDITOR").log_warning(f"Tried to undock {window.name} from a non-existent node!")
+            modules.logger("EDITOR").log_warning(f"Tried to undock {window.name} from a non-existent node!")
             return
         
         if node.is_split():
-            get_modules.Logger("EDITOR").log_warning(f"Tried to undock {window.name} from a split node!")
+            modules.logger("EDITOR").log_warning(f"Tried to undock {window.name} from a split node!")
             return
         
         node.windows.remove(window)

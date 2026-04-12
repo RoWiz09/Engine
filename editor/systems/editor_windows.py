@@ -1,7 +1,13 @@
+from __future__ import annotations
+
 import OpenGL.GL as gl
 
 from .window_drawer import *
 from . import get_modules
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from ghost_engine.object import Object
 
 import sys
 
@@ -57,19 +63,42 @@ class SceneView(EditorUiWindow):
 
         return self
     
+class Inspector(EditorUiWindow):
+    name = "Inspector"
+    def __init__(self):
+        super().__init__()
+
+        self.object_type = None
+        
+    def set_data(self, data):
+        if not self.object_type:
+            self.object_type = getattr(sys.modules["ghost_engine.object"], "Object")
+
+        if isinstance(data, self.object_type):
+            if TYPE_CHECKING:
+                self.object_type: type[Object]; data: Object
+
+            data.name
+    
 class Hierarchy(EditorUiWindow):
     name = "Hierarchy"
+
     def __init__(self):
         super().__init__()
 
         self.draw_data.padding.x = 5
         self.draw_data.padding.y = 5
 
-        self.manager = get_modules.SceneManager()
+        self.manager = get_modules.scene_manager()
         self.object_buttons: list[Button] = set()
 
         self.object_type = None
-        self.create_object_button: Button = Button(self, 100, 30, "Create Gameobject", self.create_object)
+        self.create_object_button = TextInput(self, 100, 30, "Wow!")
+        # self.create_object_button: Button = Button(self, 100, 30, "Create Gameobject", self.create_object)
+
+        Hierarchy.instances.add(self)
+
+        self.build()
 
     def create_object(self):
         if not self.object_type:
@@ -77,11 +106,12 @@ class Hierarchy(EditorUiWindow):
         
         new_obj = self.object_type("New GameObject", self.manager.materials["base_mat"])
         self.manager.game_objects.append(new_obj)
-        self.build()
-        pass
+        
+        self.rebuild_windows()
 
     def resize(self, new_width, new_height):
         orig_window_width = self.draw_data.size.x - self.draw_data.padding.x * 2
+        self.create_object_button.resize(glm.vec2(new_width - self.draw_data.padding.x * 2, self.create_object_button.size.y))
         for button in self.object_buttons:
             orig_button_width_mod = orig_window_width - button.size.x
             button.resize(glm.vec2((new_width - self.draw_data.padding.x * 2) - orig_button_width_mod, button.size.y))
@@ -89,23 +119,26 @@ class Hierarchy(EditorUiWindow):
         super().resize(new_width, new_height)
 
     def build(self):
-        if len(self.object_buttons) != len(self.manager.game_objects):
-            self.object_buttons.clear()
-            self.ui_elements.clear()
+        self.object_buttons.clear()
+        self.ui_elements.clear()
 
-            self.ui_elements.append(self.create_object_button)
+        self.ui_elements.append(self.create_object_button)
 
-            root_objects = list(filter(lambda object_: object_.transform.parent == None, self.manager.game_objects))
-            def build_layer(objects: list, width):
-                for obj in objects:
-                    button = Button(self, width, 30, obj.name, lambda object_=obj: print(object_.name))
-                    button.pos_offset = glm.vec2((self.draw_data.size.x - self.draw_data.padding.x * 2) - width, 0)
+        root_objects = list(filter(lambda object_: object_.transform.parent == None, self.manager.game_objects))
+        def build_layer(objects: list, width):
+            for obj in objects:
+                button = Button(self, width, 30, obj.name, lambda object_=obj: print(object_.name))
+                button.pos_offset = glm.vec2((self.draw_data.size.x - self.draw_data.padding.x * 2) - width, 0)
 
-                    build_layer(obj.children, max(80, width-20))
-                    self.object_buttons.add(button)
+                build_layer(obj.children, max(20, width-20))
+                self.object_buttons.add(button)
 
-            build_layer(root_objects, self.draw_data.size.x - self.draw_data.padding.x * 2)
+        build_layer(root_objects, self.draw_data.size.x - self.draw_data.padding.x * 2)
+    
+    @classmethod
+    def rebuild_windows(cls):
+        for inst in cls.instances:
+            inst.build()
 
     def draw(self, editor):
-        self.build()
         super().draw(editor)

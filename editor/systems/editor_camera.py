@@ -11,8 +11,8 @@ KeyCodes = None
 class editor_camera:
     def __init__(self, input_handler):       
         global KeyCodes, Input
-        KeyCodes = modules.KeyCodes
-        Input = modules.Input
+        KeyCodes = modules.key_codes
+        Input = modules.input_handler
 
         self.offset = glm.vec3(0.0, 0.0, 0.0)
         self.front = glm.vec3(0.0, 0.0, -1.0)

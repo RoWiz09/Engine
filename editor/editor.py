@@ -41,9 +41,7 @@ class Window:
     def __init__(self, path: str): ...
     @overload
     def __init__(self, path: str, width:int, height:int): ...
-    @overload
-    def __init__(self, path: str, width:int, height:int, name:str): ...
-    def __init__(self, path: str, width=800, height=600, name:str = "GLFW Window"):
+    def __init__(self, path: str, width=800, height=600):
         os.chdir(path)
 
         if self._created:
@@ -60,7 +58,7 @@ class Window:
         glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
         glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
 
-        self.window = glfw.create_window(width, height, name, None, None)
+        self.window = glfw.create_window(width, height, "GhostEngine Editor", None, None)
         glfw.make_context_current(self.window)
 
         self.logger.log_debug("GLFW initalized successfully!")
@@ -82,7 +80,9 @@ class Window:
         else:
             with open(".rproj") as project_file:
                 self.project_data = json.load(project_file)
-            os.environ["project"] = name
+            os.environ["project"] = self.project_data["name"]
+
+            glfw.set_window_title(self.window, "GhostEngine Editor - " + self.project_data["name"])
         self.scene_manager = SceneManager()
         self.scene_manager.load_scene_index(0, alert_scripts = False)
         Window._created = True
@@ -93,11 +93,15 @@ class Window:
         scene_viewer = SceneView()
         scene_viewer2 = Hierarchy()
         scene_viewer3 = SceneView()
-        root = self.docker.dock(self.docker.root, scene_viewer, "left")
-        self.docker.dock(root.child_b, scene_viewer2)
+        root = self.docker.dock(self.docker.root, scene_viewer, "right")
+        self.docker.dock(root.child_a, scene_viewer2)
+        self.docker.set_ratio(root, 0.15, self)
+        self.docker.dock(root.child_b, scene_viewer3, "right")
+        self.docker.compute_layout(self)
 
         self.drawer.add_window_data(scene_viewer)
         self.drawer.add_window_data(scene_viewer2)
+        self.drawer.add_window_data(scene_viewer3)
 
         self.editor_cam = editor_camera(self.input_handler)
         self.moving_camera = False
@@ -136,7 +140,7 @@ class Window:
         glfw.poll_events()
         self.input_handler.get_inputs(self.window)
 
-        if self.input_handler.get_key_down(KeyCodes.k_Z):
+        if self.input_handler.get_key_down(KeyCodes.k_Z) and isinstance(self.drawer.focused_window, SceneView):
             self.moving_camera = not self.moving_camera
 
         # Set up for a new frame
@@ -184,7 +188,7 @@ def get_path(location: str):
 base_path = get_path(arg_parser.get_arg("project-path"))
 os.chdir(base_path)
 Logger, SceneManager, Input = modules.get_modules(base_path)
-KeyCodes, MouseButtons = modules.KeyCodes, modules.MouseButtons
+KeyCodes, MouseButtons = modules.key_codes, modules.mouse_buttons
 
 window = Window(base_path)
 while not window.should_close():

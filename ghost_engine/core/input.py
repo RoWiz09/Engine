@@ -111,6 +111,20 @@ class Input:
         self.__mouse_buttons_pressed_last = set()
         Input._initialized = True
 
+        glfw.set_char_callback(glfw.get_current_context(), self.input_handler)
+        glfw.set_key_callback(glfw.get_current_context(), self.extras_handler)
+
+        self.key_press_callback = None
+        self.key_extras_callback = None
+
+    def input_handler(self, window, key: int):
+        if self.key_press_callback:
+            self.key_press_callback(key)
+
+    def extras_handler(self, window, key, scancode, action, mods):
+        if self.key_extras_callback:
+            self.key_extras_callback(key, scancode, action, mods)
+
     def get_inputs(self, window):
         """Polls GLFW and updates key states each frame."""
         self.__keys_pressed_last = self.__keys_pressed_now.copy()

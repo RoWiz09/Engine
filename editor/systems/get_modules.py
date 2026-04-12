@@ -1,11 +1,30 @@
 import importlib.util as import_util
 import os, sys
 
-Logger, SceneManager, Input = None, None, None
-KeyCodes, MouseButtons = None, None
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from ghost_engine.core.logger import Logger
+    from ghost_engine.core.scene_manager import SceneManager
+    from ghost_engine.core.input import Input
+    
+    from ghost_engine.core.input import KeyCodes, MouseButtons
+
+if TYPE_CHECKING:
+    logger: type[Logger] = None
+    scene_manager: type[SceneManager] = None
+    input_handler: type[Input] = None
+    key_codes: type[KeyCodes] = None
+    mouse_buttons: type[MouseButtons] = None
+
+else:
+    logger = None
+    scene_manager = None
+    input_handler = None
+    key_codes = None
+    mouse_buttons = None
 
 def get_modules(base_path: str):
-    global Logger, SceneManager, Input, KeyCodes, MouseButtons
+    global logger, scene_manager, input_handler, key_codes, mouse_buttons
     if base_path not in sys.path:
         sys.path.insert(0, base_path)
 
@@ -26,14 +45,14 @@ def get_modules(base_path: str):
 
     # Import Logger
     init_module = load_engine_module("__init__", ["ghost_engine", "__init__.py"], "ghost_engine")
-    Logger = getattr(init_module, "Logger")
-    SceneManager = getattr(init_module, "SceneManager")
-    Input = getattr(init_module, "Input") 
+    logger = getattr(init_module, "Logger")
+    scene_manager = getattr(init_module, "SceneManager")
+    input_handler = getattr(init_module, "Input") 
 
-    KeyCodes = getattr(init_module, "KeyCodes") 
-    MouseButtons = getattr(init_module, "MouseButtons")
+    key_codes = getattr(init_module, "KeyCodes") 
+    mouse_buttons = getattr(init_module, "MouseButtons")
     getattr(init_module, "setup")()
 
-    return Logger, SceneManager, Input
+    return logger, scene_manager, input_handler
 
 

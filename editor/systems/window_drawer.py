@@ -10,12 +10,19 @@ from pyglm import glm
 from systems.shader_program import ShaderProgram
 from enum import Enum
 
-from .font import render_window_label, render_text
+from .font import render_window_label, render_text, TextStyle, AnchorPoints
 from PIL import Image, ImageDraw
 
 from typing import TYPE_CHECKING
+from typing import Any, TypeAlias
 if TYPE_CHECKING:
     from ..editor import Window
+    from ghost_engine.core.input import KeyCodes, MouseButtons, Input
+
+else:
+    KeyCodes: TypeAlias = Any
+    MouseButtons: TypeAlias = Any
+    Input: TypeAlias = Any
 
 class ButtonStates(Enum):
     PRESSED = 0
@@ -51,10 +58,13 @@ class WindowDrawer:
         for window in self.windows:
             window.draw(editor)
             
+            if self.focused_window and self.focused_window.focused_elem:
+                continue
+
             if window.rect.collide_point(glm.vec2(*editor.input_handler.mouse_pos)):
                 self.focused_window = window
 
-    def handle_input(self, key_codes, mouse_buttons, input_handler):
+    def handle_input(self, key_codes: type[KeyCodes], mouse_buttons: type[MouseButtons], input_handler: Input):
         if self.focused_window:
             self.focused_window.handle_input(key_codes, mouse_buttons, input_handler)
 
@@ -147,8 +157,23 @@ def build_window_img(window: EditorUiWindow):
 
     return img
 
+class TextRenderAnchor(Enum):
+    top_left = glm.vec2(0, 0)
+    top_middle = glm.vec2(0.5, 0)
+    top_right = glm.vec2(1, 0)
+
+    middle_left = glm.vec2(0, 0.5)
+    middle_middle = glm.vec2(0.5, 0.5)
+    middle_right = glm.vec2(1, 0.5)
+
+    bottom_left = glm.vec2(0, 1)
+    bottom_middle = glm.vec2(0.5, 1)
+    bottom_right = glm.vec2(1, 1)
+
 class EditorUiWindow:
     name: str
+    def __init_subclass__(cls):
+        setattr(cls, "instances", set())
 
     def __init__(self):
         self.draw_data = UiDrawData()
@@ -174,6 +199,7 @@ class EditorUiWindow:
         gl.glBindTexture(gl.GL_TEXTURE_2D, 0)
 
         self.focused_elem: UiElement = None
+        self.__class__.instances.add(self)
 
     def get_draw_data(self):
         return self.draw_data
@@ -244,10 +270,10 @@ class EditorUiWindow:
             child.draw(editor, pos)
             pos.y += child.get_height() + self.draw_data.padding.y
 
-    def handle_input(self, key_codes, mouse_buttons, input_handler):
+    def handle_input(self, key_codes: type[KeyCodes], mouse_buttons: type[MouseButtons], input_handler: Input):
         if self.focused_elem:
             elem = self.focused_elem
-            if not elem.rect.collide_point(glm.vec2(*input_handler.mouse_pos)):
+            if not elem.rect.collide_point(glm.vec2(*input_handler.mouse_pos)) and not self.focused_elem.hold_focus:
                 self.focused_elem.lose_focus()
                 self.focused_elem = None
 
@@ -270,6 +296,8 @@ class EditorUiWindow:
 
 class UiElement:
     can_claim_focus: bool = False
+    hold_focus: bool = False
+
     def __init__(self, parent: EditorUiWindow, width: float, height: float):
         self.size = glm.vec2(width, height)
         self.pos_offset = glm.vec2(0, 0)
@@ -348,7 +376,7 @@ class UiElement:
     def get_height(self):
         return self.size.y + self.pos_offset.y
     
-    def handle_input(self, keycodes, mouse_buttons, input_handler):
+    def handle_input(self, keycodes: type[KeyCodes], mouse_buttons: type[MouseButtons], input_handler: Input):
         pass
 
     def focus(self):
@@ -394,7 +422,47 @@ class TextElement(UiElement):
     def __init__(self, parent, text: str, width: float, height: float):
         super().__init__(parent, width, height)
 
-        img = render_text(text, width, height)
+        self.message = text
+
+        self.style = TextStyle.NORMAL
+        self.anchor: AnchorPoints = "mm"
+        self.text_draw_anchor: TextRenderAnchor = TextRenderAnchor.middle_middle
+        self.old = False
+
+        offset = self.size * self.text_draw_anchor.value
+        img = render_text(text, width, height, int(offset.x), int(offset.x), self.style, self.anchor)
+        gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture)
+        gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA, *img.size, 0, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, img.tobytes())
+
+    def bold(self):
+        self.style = TextStyle.BOLD
+        self.old = True
+
+    def italicize(self):
+        self.style = TextStyle.ITALICS
+        self.old = True
+
+    def set_anchor(self, anchor: AnchorPoints, render_anchor: TextRenderAnchor):
+        self.anchor = anchor
+        self.text_draw_anchor = render_anchor
+
+    def draw(self, editor, pos):
+        if self.old:
+            offset = self.size * self.text_draw_anchor.value
+            img = render_text(self.message, int(self.size.x), int(self.size.y), 
+                              int(offset.x), int(offset.y), self.style, self.anchor)
+            gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture)
+            gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA, *img.size, 0, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, img.tobytes())
+
+            self.old = False
+
+        return super().draw(editor, pos)
+
+    def resize(self, size):
+        super().resize(size)
+
+        offset = self.size * self.text_draw_anchor.value
+        img = render_text(self.message, int(size.x), int(size.y), int(offset.x), int(offset.y), self.style, self.anchor)
         gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture)
         gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA, *img.size, 0, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, img.tobytes())
     
@@ -457,6 +525,104 @@ class Button(UiElement):
 
         gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture)
         gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA, *img.size, 0, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, img.tobytes())
+
+        self.label.resize(size)
+
+class TextInput(UiElement):
+    can_claim_focus = True
+    hold_focus = False
+    def __init__(self, parent, width, height, hint: str = ""):
+        super().__init__(parent, width, height)
+
+        self.hint = hint
+        self.message = ""
+        self.selection_idx = 0
+
+        self.label = TextElement(None, hint, width, height)
+        self.label.set_anchor("lm", TextRenderAnchor.middle_left)
+        self.old = False
+
+        self.label.italicize()
+
+        self.was_focused_last = self.focused
+        self.hold_focus = False
+
+    def build_texture(self):
+        if self.focused:
+            col = (69, 73, 78)
+        else:
+            col = (58, 61, 65)
+
+        img = Image.new("RGBA", (int(self.rect.size.x), int(self.rect.size.y)), (0, 0, 0, 0))
+        ImageDraw.Draw(img, "RGBA").rounded_rectangle(
+            (0, 0, int(self.rect.size.x), int(self.rect.size.y)), radius=5, fill=col)
+        
+        return img
+
+    def resize(self, size):
+        super().resize(size)
+
+        img = self.build_texture()
+
+        gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture)
+        gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA, *img.size, 0, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, img.tobytes())
+
+        self.label.resize(size)
+
+    def draw(self, editor, pos):
+        if self.rect.pos != pos:
+            self.rect.move_to(glm.vec2(*pos))
+
+        if self.message != "":
+            self.label.message = self.message
+            self.label.style = TextStyle.NORMAL
+
+        else:
+            self.label.message = self.hint
+            self.label.style = TextStyle.ITALICS
+
+        self.label.old = self.old
+        self.old = False
+
+        if self.focused != self.was_focused_last:
+            img = self.build_texture()
+
+            gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture)
+            gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA, *img.size, 0, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, img.tobytes())
+            self.was_focused_last = self.focused
+
+        super().draw(editor, pos)
+        self.label.draw(editor, pos)
+
+    def lose_focus(self):
+        self.input_handler_.key_press_callback = None
+        self.input_handler_.key_extras_callback = None
+        self.parent.focused_elem = None
+        
+        return super().lose_focus()
+
+    def input_handler(self, key: int):
+        self.message = self.message[:self.selection_idx] + chr(key) + self.message[self.selection_idx:]
+        self.selection_idx += 1
+        self.old = True
+
+    def extras_handler(self, key, scancode, action, mods):
+        if action == glfw.PRESS or action == glfw.REPEAT:
+            if key == glfw.KEY_BACKSPACE:
+                self.message = self.message[:self.selection_idx-1] + self.message[self.selection_idx:]
+                self.selection_idx = max(0, self.selection_idx-1)
+                self.old = True
+            
+            if key == glfw.KEY_ESCAPE:
+                self.lose_focus()
+
+    def handle_input(self, keycodes, mouse_buttons, input_handler):
+        self.input_handler_ = input_handler
+        if input_handler.get_mouse_button_down(mouse_buttons.LEFT):
+            input_handler.key_press_callback = self.input_handler
+            input_handler.key_extras_callback = self.extras_handler
+
+            self.hold_focus = True
 
 class UiDrawData:
     def __init__(self, x: float = 0, y: float = 0, width: float = 100, height: float = 100):
