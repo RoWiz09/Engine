@@ -1,5 +1,4 @@
 from ghost_engine.behavior import Behavior, EditorField
-from .collider import CubeCollider
 
 from pyglm import glm
 

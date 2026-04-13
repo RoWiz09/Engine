@@ -5,7 +5,7 @@ from .core.logger import Logger
 from .rendering.material import Material
 from .core.transform import Transform
 
-from .behavior import Behavior
+from .behavior import Behavior, RenderBehavior
 import sys
 
 from typing import TypeVar
@@ -36,6 +36,8 @@ class Object:
         self.__transform = transform
         self.__enabled = True
 
+        self.__render_components: list[RenderBehavior] = []
+
         for comp in components:
             if issubclass(type(comp), Behavior):
                 self.components.append(comp)
@@ -45,14 +47,14 @@ class Object:
 
     # Rendering
     def pre_render(self):
-        list(map(lambda s: s.pre_render(), self.components))
+        list(map(lambda s: s.pre_render(), self.__render_components))
 
     def render(self):
         self.mat.use()
-        list(map(lambda s: s.on_render(), self.components))
+        list(map(lambda s: s.on_render(), self.__render_components))
 
     def post_render(self):
-        list(map(lambda s: s.post_render(), self.components))
+        list(map(lambda s: s.post_render(), self.__render_components))
 
     def set_material(self, mat:Material):
         self.mat = mat
@@ -91,6 +93,10 @@ class Object:
             if issubclass(type(component), Behavior):
                 component._gameobject = self
                 self.components.append(component)
+
+                if issubclass(type(component), RenderBehavior):
+                    self.__render_components.append(component)
+
             else:
                 Logger("CORE").log_error(f"Object of type {type(component).__name__} is not a Behavior.")
 
@@ -98,6 +104,9 @@ class Object:
         if issubclass(type(component), Behavior):
             component._gameobject = self
             self.components.append(component)
+
+            if issubclass(type(component), RenderBehavior):
+                self.__render_components.append(component)
 
     # Properties
     @property

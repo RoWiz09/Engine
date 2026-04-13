@@ -34,14 +34,103 @@ class InitMethod:
 
         return wrapper
 
+class PhysicsBehavior:
+    """
+    An interface, adding methods for the following events:
+    - `on_collision` (variants: `_start`, `_exit`): Called when two collision objects collide with each other.
+    - `on_trigger` (variants: `_start`, `_exit`): Called when a trigger collider on this gameobject is entered.
+    """
+
+    # Collisions
+    def on_collision_start(self, other):
+        """
+        Called upon a collision 'starting', or the first collision between two gameobjects.
+        
+        :param other: The colliding gameobject
+        :type other: Object
+        """
+        pass
+
+    def on_collision(self, other):
+        """
+        Continuously called while there is a collision between two gameobjects.
+        
+        :param other: The colliding gameobject
+        :type other: Object
+        """
+        pass
+
+    def on_collision_exit(self, other):
+        """
+        Called when there is no longer a collision between two gameobjects.
+        
+        :param other: The gamobject collided with
+        :type other: Object
+        """
+        pass
+
+    # Triggers
+    def on_trigger_start(self, other):
+        """
+        Called upon a trigger 'starting', or the first trigger collision between two gameobjects.
+        
+        :param other: The colliding gameobject
+        :type other: Object
+        """
+        pass
+
+    def on_trigger(self, other):
+        """
+        Continuously called while there is a trigger collision between two gameobjects.
+        
+        :param other: The colliding gameobject
+        :type other: Object
+        """
+        pass
+
+    def on_trigger_exit(self, other):
+        """
+        Called when there is no longer a trigger collision between two gameobjects.
+        
+        :param other: The gamobject collided with
+        :type other: Object
+        """
+        pass
+
+class RenderBehavior:
+    """
+    An interface, adding methods for the following events:
+    - `pre_render`: A method called before rendering any objects.
+    - `on_render`: A method called when rendering objects. Recommended use is to draw a mesh.
+    - `post_render`: A method called after rendering all objects in the scene.
+    """
+
+    def pre_render(self):
+        """
+            Called before rendering any objects, used by the mesh class to set up VBO's/VAO's.
+        """
+        pass
+
+    def on_render(self):
+        """
+            Called during SceneManager.render_scene(); used by the mesh class to render meshes.
+        """
+        pass
+
+    def post_render(self):
+        """
+            Called after rendering all objects.
+        """
+        pass
+
 class Behavior:
     """
-    The basic class all scripts should inherit from. Exposes methods for:\n
-    - __init__(self, gameobject): basic script initalization
-    - on_frame_start/end: Class methods called upon the start or end of a frame respectively
-    - on_collision (start and end): Methods called upon collisions
-    - update/fixed_update: Methods called every frame/~50th of a second
-    - on_scene_load/unload: Methods called upon the loading/unloading of a scene.
+    The basic class all scripts are required to inherit from. Implements events for:
+    - `__init__`: Class initalization. 
+    - `update`: Called every 'update', or 'tick', during the game's runtime.
+    - `fixed_update`: Called ~50 times every second, typically used for physics.
+    - `on_frame` (`_start` / `_end`): Called at the start or end of a frame, respectively.
+    - `on_scene` (`_load` / `_unload`): Called when a scene is loaded or unloaded, respectively. Most useful when attached to static objects.
     """
     component_category_registry: dict[str, list[Behavior]] = {}
     category = "General"
@@ -119,26 +208,7 @@ class Behavior:
             Runs 50 times every second. Usually used for physics, or timers.\n
             Sometimes it'll run 51 or 49 times per second, so it'll be slightly off.
         """
-        pass
-
-    # Rendering methods
-    def pre_render(self):
-        """
-            Called before rendering any objects, used by the mesh class to set up VBO's/VAO's.
-        """
-        pass
-
-    def on_render(self):
-        """
-            Called during SceneManager.render_scene(); used by the mesh class to render meshes.
-        """
-        pass
-
-    def post_render(self):
-        """
-            Called after rendering all objects.
-        """
-        pass
+        pass    
 
     # Scene methods
     def on_scene_load(self, scene_info):
@@ -154,61 +224,6 @@ class Behavior:
             Called when the scene unloads!
             Args:
                 scene_info (SceneInfo): The SceneInfo object for the unloaded scene
-        """
-        pass
-
-    # Collision / Trigger methods
-    def on_collision_start(self, other):
-        """
-        Called upon a collision 'starting', or the first collision between two gameobjects.
-        
-        :param other: The colliding gameobject
-        :type other: Object
-        """
-        pass
-
-    def on_collision(self, other):
-        """
-        Continuously called while there is a collision between two gameobjects.
-        
-        :param other: The colliding gameobject
-        :type other: Object
-        """
-        pass
-
-    def on_collision_exit(self, other):
-        """
-        Called when there is no longer a collision between two gameobjects.
-        
-        :param other: The gamobject collided with
-        :type other: Object
-        """
-        pass
-
-    def on_trigger_start(self, other):
-        """
-        Called upon a trigger 'starting', or the first trigger collision between two gameobjects.
-        
-        :param other: The colliding gameobject
-        :type other: Object
-        """
-        pass
-
-    def on_trigger(self, other):
-        """
-        Continuously called while there is a trigger collision between two gameobjects.
-        
-        :param other: The colliding gameobject
-        :type other: Object
-        """
-        pass
-
-    def on_trigger_exit(self, other):
-        """
-        Called when there is no longer a trigger collision between two gameobjects.
-        
-        :param other: The gamobject collided with
-        :type other: Object
         """
         pass
 

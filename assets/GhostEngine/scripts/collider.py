@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from ghost_engine.behavior import Behavior, EditorField
-from ghost_engine.object import Object
+
 
 from pyglm.glm import vec3
 
@@ -20,7 +20,7 @@ class CubeCollider(Behavior):
 
     run_in_editor = True
 
-    def __init__(self, gameobject: Object):
+    def __init__(self, gameobject):
         super().__init__(gameobject)
 
     def get_bounds(self) -> tuple[vec3, vec3]:

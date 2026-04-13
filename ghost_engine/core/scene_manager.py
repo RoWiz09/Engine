@@ -5,7 +5,7 @@ from .packer import Pack
 from ..object import Object 
 from .input import Input, KeyCodes
 
-from ..behavior import Behavior
+from ..behavior import *
 
 from ..rendering.camera_type import CamType
 

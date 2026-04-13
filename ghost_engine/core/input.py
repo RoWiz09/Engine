@@ -116,12 +116,18 @@ class Input:
 
         self.key_press_callback = None
         self.key_extras_callback = None
+        self.key_paste_callback = None
 
     def input_handler(self, window, key: int):
         if self.key_press_callback:
             self.key_press_callback(key)
 
     def extras_handler(self, window, key, scancode, action, mods):
+        if key == glfw.KEY_V and action == glfw.PRESS and (mods & glfw.MOD_CONTROL) and self.key_paste_callback:
+            clipboard_content = glfw.get_clipboard_string(window).decode().strip()
+            self.key_paste_callback(clipboard_content)
+            return
+
         if self.key_extras_callback:
             self.key_extras_callback(key, scancode, action, mods)
 

@@ -65,21 +65,74 @@ class SceneView(EditorUiWindow):
     
 class Inspector(EditorUiWindow):
     name = "Inspector"
+    
+    object_type = None
     def __init__(self):
         super().__init__()
 
-        self.object_type = None
-        
-    def set_data(self, data):
-        if not self.object_type:
-            self.object_type = getattr(sys.modules["ghost_engine.object"], "Object")
+        self.draw_data.padding.x = 10
+        self.draw_data.padding.y = 5
 
+        self.locked = False
+        
+    def resize(self, new_width, new_height):
+        old_renderable_width = self.draw_data.size.x - self.draw_data.padding.x * 2
+        new_renderable_width = new_width - self.draw_data.padding.x * 2
+        for ui_obj in self.ui_elements:
+            width_ratio = ui_obj.size.x / old_renderable_width
+
+            ui_obj.resize(glm.vec2(width_ratio * new_renderable_width, ui_obj.size.y))
+
+        return super().resize(new_width, new_height)
+
+    def build(self, data):
+        if self.locked:
+            return
+        
+        self.ui_elements.clear()        
         if isinstance(data, self.object_type):
             if TYPE_CHECKING:
                 self.object_type: type[Object]; data: Object
 
-            data.name
+            def set_name(name_in):
+                data.name = name_in.message
+                Hierarchy.rebuild_windows()
+
+            renderable_width = (self.draw_data.size - (self.draw_data.padding * 2)).x
+            # Name Data
+            name_in = InputField(self, renderable_width, 30, hint="Object Name...", starting_message=data.name)
+            name_in.lose_focus_callback = lambda n=name_in: set_name(n)
+
+            # Transform Data
+            TextElement(self, "Transform", renderable_width, 30).set_text_size(20)
+            HorizontalLayout(
+                self, (self.draw_data.size - (self.draw_data.padding * 2)).x, 50, [
+                    x_pos := InputField(None, 10, 10, "x", str(data.transform.localpos.x), InputField.float_filter),
+                    y_pos := InputField(None, 10, 10, "y", str(data.transform.localpos.y), InputField.float_filter),
+                    z_pos := InputField(None, 10, 10, "z", str(data.transform.localpos.z), InputField.float_filter)
+                ])
+            
+            def set_obj_pos():
+                data.transform.localpos = glm.vec3(
+                    float(x_pos.message),
+                    float(y_pos.message),
+                    float(z_pos.message)
+                )
+            
+            x_pos.lose_focus_callback = set_obj_pos
+            y_pos.lose_focus_callback = set_obj_pos
+            z_pos.lose_focus_callback = set_obj_pos
     
+    @classmethod
+    def set_data(cls, data):
+        if not cls.object_type:
+            cls.object_type = getattr(sys.modules["ghost_engine.object"], "Object")
+
+        for inst in cls.instances:
+            inst: Inspector
+
+            inst.build(data)
+
 class Hierarchy(EditorUiWindow):
     name = "Hierarchy"
 
@@ -93,12 +146,13 @@ class Hierarchy(EditorUiWindow):
         self.object_buttons: list[Button] = set()
 
         self.object_type = None
-        self.create_object_button = TextInput(self, 100, 30, "Wow!")
-        # self.create_object_button: Button = Button(self, 100, 30, "Create Gameobject", self.create_object)
+        self.create_object_button: Button = Button(self, 100, 30, "Create Gameobject", self.create_object)
 
         Hierarchy.instances.add(self)
 
         self.build()
+
+        self.old = False
 
     def create_object(self):
         if not self.object_type:
@@ -127,7 +181,7 @@ class Hierarchy(EditorUiWindow):
         root_objects = list(filter(lambda object_: object_.transform.parent == None, self.manager.game_objects))
         def build_layer(objects: list, width):
             for obj in objects:
-                button = Button(self, width, 30, obj.name, lambda object_=obj: print(object_.name))
+                button = Button(self, width, 30, obj.name, lambda object_=obj: Inspector.set_data(object_))
                 button.pos_offset = glm.vec2((self.draw_data.size.x - self.draw_data.padding.x * 2) - width, 0)
 
                 build_layer(obj.children, max(20, width-20))
@@ -141,4 +195,8 @@ class Hierarchy(EditorUiWindow):
             inst.build()
 
     def draw(self, editor):
+        if self.old:
+            self.build()
+            self.old = False
+            
         super().draw(editor)

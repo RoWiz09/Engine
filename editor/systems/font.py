@@ -27,11 +27,16 @@ def render_window_label(text: str, window_width: int):
 
     return img
 
-def render_text(text: str, width: int, height: int, x_off: int, y_off: int, style: TextStyle, anchor_point: AnchorPoints = "mm"):    
+def render_text(text: str, width: int, height: int, x_off: int, y_off: int, style: TextStyle, anchor_point: AnchorPoints = "mm", size: int = None):    
     img = Image.new("RGBA", (int(width), int(height)), (0, 0, 0, 0))
     drawer = ImageDraw.Draw(img, "RGBA")
 
-    drawer.text((x_off, y_off), text, font=style.value, anchor=anchor_point)
+    if size:
+        font = style.value.font_variant(size=size)
+    else:
+        font = style.value
+
+    drawer.text((x_off, y_off), text, font=font, anchor=anchor_point)
 
     img = img.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
     return img
