@@ -106,22 +106,94 @@ class Inspector(EditorUiWindow):
             # Transform Data
             TextElement(self, "Transform", renderable_width, 30).set_text_size(20)
             HorizontalLayout(
-                self, (self.draw_data.size - (self.draw_data.padding * 2)).x, 50, [
-                    x_pos := InputField(None, 10, 10, "x", str(data.transform.localpos.x), InputField.float_filter),
-                    y_pos := InputField(None, 10, 10, "y", str(data.transform.localpos.y), InputField.float_filter),
-                    z_pos := InputField(None, 10, 10, "z", str(data.transform.localpos.z), InputField.float_filter)
-                ])
+                self, (self.draw_data.size - (self.draw_data.padding * 2)).x, 30, [
+                    x_pos := InputField(None, 10, 10, "X Position", str(data.transform.localpos.x)),
+                    y_pos := InputField(None, 10, 10, "Y Position", str(data.transform.localpos.y)),
+                    z_pos := InputField(None, 10, 10, "Z Position", str(data.transform.localpos.z))
+                ]).set_padding(glm.vec2(5, 5))
+
+            HorizontalLayout(
+                self, (self.draw_data.size - (self.draw_data.padding * 2)).x, 30, [
+                    x_rot := InputField(None, 10, 10, "X Rotation", str(data.transform.localrot.x)),
+                    y_rot := InputField(None, 10, 10, "Y Rotation", str(data.transform.localrot.y)),
+                    z_rot := InputField(None, 10, 10, "Z Rotation", str(data.transform.localrot.z))
+                ]).set_padding(glm.vec2(5, 5))
             
-            def set_obj_pos():
+            HorizontalLayout(
+                self, (self.draw_data.size - (self.draw_data.padding * 2)).x, 30, [
+                    x_scale := InputField(None, 10, 10, "X Scale", str(data.transform.scale.x)),
+                    y_scale := InputField(None, 10, 10, "Y Scale", str(data.transform.scale.y)),
+                    z_scale := InputField(None, 10, 10, "Z Scale", str(data.transform.scale.z))
+                ]).set_padding(glm.vec2(5, 5))
+            
+            # Setup position inputs
+            def set_obj_pos(input_):
                 data.transform.localpos = glm.vec3(
                     float(x_pos.message),
                     float(y_pos.message),
                     float(z_pos.message)
                 )
-            
-            x_pos.lose_focus_callback = set_obj_pos
-            y_pos.lose_focus_callback = set_obj_pos
-            z_pos.lose_focus_callback = set_obj_pos
+
+            x_pos.validate_command = InputField.validate_float            
+            x_pos.run_command_when_empty = False            
+            x_pos.type_ = float
+            x_pos.command = set_obj_pos
+
+            y_pos.validate_command = InputField.validate_float            
+            y_pos.run_command_when_empty = False            
+            y_pos.type_ = float
+            y_pos.command = set_obj_pos
+
+            z_pos.validate_command = InputField.validate_float            
+            z_pos.run_command_when_empty = False            
+            z_pos.type_ = float
+            z_pos.command = set_obj_pos
+
+            # Setup rotation inputs
+            def set_obj_rot(input_):
+                data.transform.localrot = glm.vec3(
+                    float(x_rot.message),
+                    float(y_rot.message),
+                    float(z_rot.message)
+                )
+
+            x_rot.validate_command = InputField.validate_float            
+            x_rot.run_command_when_empty = False            
+            x_rot.type_ = float
+            x_rot.command = set_obj_rot
+
+            y_rot.validate_command = InputField.validate_float            
+            y_rot.run_command_when_empty = False            
+            y_rot.type_ = float
+            y_rot.command = set_obj_rot
+
+            z_rot.validate_command = InputField.validate_float            
+            z_rot.run_command_when_empty = False            
+            z_rot.type_ = float
+            z_rot.command = set_obj_rot
+
+            # Setup scale inputs
+            def set_obj_scale(input_):
+                data.transform.scale = glm.vec3(
+                    float(x_scale.message),
+                    float(y_scale.message),
+                    float(z_scale.message)
+                )
+
+            x_scale.validate_command = InputField.validate_float            
+            x_scale.run_command_when_empty = False            
+            x_scale.type_ = float
+            x_scale.command = set_obj_scale
+
+            y_scale.validate_command = InputField.validate_float            
+            y_scale.run_command_when_empty = False            
+            y_scale.type_ = float
+            y_scale.command = set_obj_scale
+
+            z_scale.validate_command = InputField.validate_float            
+            z_scale.run_command_when_empty = False            
+            z_scale.type_ = float
+            z_scale.command = set_obj_scale
     
     @classmethod
     def set_data(cls, data):

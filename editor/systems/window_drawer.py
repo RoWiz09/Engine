@@ -540,10 +540,15 @@ class InputField(UiElement):
     can_claim_focus = True
     hold_focus = False
 
-    float_filter = "0123456789."
-    int_filter = "0123456789"
+    @staticmethod
+    def validate_float(message: str):
+        try:
+            float(message)
+            return True
+        except ValueError:
+            return False
 
-    def __init__(self, parent, width, height, hint: str = "", starting_message: str = "", filter_data: str = None):
+    def __init__(self, parent, width, height, hint: str = "", starting_message: str = "", type_: Any = str):
         super().__init__(parent, width, height)
 
         self.hint = hint
@@ -553,8 +558,6 @@ class InputField(UiElement):
         self.label = TextElement(None, hint if self.message == "" else self.message, width, height)
         self.label.set_anchor("lm", TextRenderAnchor.middle_left)
         self.old = False
-
-        self.filter = filter_data
 
         if self.message == "":
             self.label.italicize()
@@ -568,6 +571,12 @@ class InputField(UiElement):
         self.hold_focus = False
 
         self.lose_focus_callback = None
+
+        self.validate_command = None
+        self.set_when_empty = ""
+        self.command = None
+        self.run_command_when_empty = True
+        self.type_ = type_
 
     def build_texture(self):
         if self.focused:
@@ -626,24 +635,48 @@ class InputField(UiElement):
 
         self.hold_focus = False
 
+        if self.type_:
+            self.message = str(self.type_(self.message))
+            self.old = True
+
         if self.lose_focus_callback:
             self.lose_focus_callback()
         
         return super().lose_focus()
     
     def paste_handler(self, clipboard_contents: str):
-        self.message = self.message[:self.selection_idx] + clipboard_contents + self.message[self.selection_idx:]
-        self.selection_idx += len(clipboard_contents)
-        self.old = True
+        new_message = self.message[:self.selection_idx] + clipboard_contents + self.message[self.selection_idx:]
+
+        if self.validate_command:
+            if self.validate_command(new_message):
+                self.message = new_message
+                self.selection_idx += len(clipboard_contents)
+                self.old = True
+
+        else:
+            self.message = new_message
+            self.selection_idx += len(clipboard_contents)
+            self.old = True
+
+        if self.old:
+            self.command(self)
 
     def input_handler(self, key: int):
         char = chr(key)
-        if self.filter and not char in self.filter:
-            return
-        
-        self.message = self.message[:self.selection_idx] + char + self.message[self.selection_idx:]
-        self.selection_idx += 1
-        self.old = True
+        new_message = self.message[:self.selection_idx] + char + self.message[self.selection_idx:]
+        if self.validate_command:
+            if self.validate_command(new_message):
+                self.message = new_message
+                self.selection_idx += 1
+                self.old = True
+
+        else:
+            self.message = new_message
+            self.selection_idx += 1
+            self.old = True
+
+        if self.old:
+            self.command(self)
 
     def extras_handler(self, key, scancode, action, mods):
         if action == glfw.PRESS or action == glfw.REPEAT:
@@ -651,6 +684,14 @@ class InputField(UiElement):
                 self.message = self.message[:self.selection_idx-1] + self.message[self.selection_idx:]
                 self.selection_idx = max(0, self.selection_idx-1)
                 self.old = True
+
+                if self.run_command_when_empty and not self.message:
+                    self.command(self)
+                elif self.message:
+                    self.command(self)
+
+                if self.set_when_empty and not self.message:
+                    self.message = self.set_when_empty
             
             if key == glfw.KEY_ESCAPE:
                 self.lose_focus()
@@ -689,6 +730,17 @@ class HorizontalLayout(UiElement):
         img = self.build_texture()
         gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture)
         gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA, *img.size, 0, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, img.tobytes())
+
+    def update_positions(self):
+        for elem in self.elems:
+            width_ = ((self.size.x - self.padding.x * 2) - (self.padding.x * (len(self.elems) - 1))) / len(self.elems) 
+            height_ = self.size.y - self.padding.y * 2
+            elem.resize(glm.vec2(width_, height_))
+            elem.parent = self
+
+    def set_padding(self, new_padding: glm.vec2):
+        self.padding = new_padding
+        self.update_positions()
 
     def build_texture(self):
         if self.focused:
@@ -730,11 +782,22 @@ class HorizontalLayout(UiElement):
     def handle_input(self, keycodes, mouse_buttons, input_handler):
         if self.focused_elem:
             self.focused_elem.handle_input(keycodes, mouse_buttons, input_handler)
-            self.hold_focus = self.focused_elem.hold_focus
+            if self.focused_elem:
+                self.hold_focus = self.focused_elem.hold_focus
+
+                if not self.focused_elem.hold_focus:
+                    if not self.focused_elem.rect.collide_point(glm.vec2(*input_handler.mouse_pos)):
+                        self.focused_elem.lose_focus()
+
+            return
 
         for elem in self.elems:
             if elem.rect.collide_point(glm.vec2(*input_handler.mouse_pos)):
+                if self.focused_elem:
+                    self.focused_elem.lose_focus()
                 self.focused_elem = elem
+                self.focused_elem.focus()
+                break
 
 class UiDrawData:
     def __init__(self, x: float = 0, y: float = 0, width: float = 100, height: float = 100):
