@@ -17,8 +17,8 @@ class Mesh(Behavior, RenderBehavior):
     # Class-level registry for shared mesh data
     _mesh_registry = {}
 
-    mesh_path = EditorField('str', "")
-    mesh_name = EditorField('str', "")
+    mesh_path = EditorField(str, "")
+    mesh_name = EditorField(str, "")
 
     run_in_editor = True
 

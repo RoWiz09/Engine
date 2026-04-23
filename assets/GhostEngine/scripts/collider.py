@@ -14,9 +14,9 @@ class CubeCollider(Behavior):
     triggers_last_frame = []
     category = "Physics"
 
-    scale_factor = EditorField("vec3", vec3(1))
-    pos_offset = EditorField("vec3", vec3(0))
-    trigger_collider = EditorField("bool", False)
+    scale_factor = EditorField(vec3, vec3(1))
+    pos_offset = EditorField(vec3, vec3(0))
+    trigger_collider = EditorField(bool, False)
 
     run_in_editor = True
 

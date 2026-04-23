@@ -88,7 +88,6 @@ class DockNode:
             modules.logger("EDITOR").log_warning("Tried to get which child a node was when the node wasn't a child of the parent!")
             return
 
-
 class Docker:
     def __init__(self):
         self.nodes: list[DockNode] = [] 

@@ -1,5 +1,11 @@
 from typing_extensions import overload
 from pyglm import glm
+from typing import TYPE_CHECKING, TypeAlias, Any
+if TYPE_CHECKING:
+    from ..object import Object
+
+else:
+    Object: TypeAlias = Any
 
 import numpy as np
 
@@ -14,8 +20,8 @@ class Transform:
 
         self.scale = scale
 
-        self.__parent = parent
-        self.gameobject = None
+        self.__parent: Transform = parent
+        self.gameobject: Object = None
 
     @property
     def pos(self):
@@ -68,7 +74,11 @@ class Transform:
     
     @parent.setter
     def parent(self, value):
+        if self.__parent:
+            self.__parent.gameobject.children.remove(self.gameobject)
         self.__parent = value
+        if self.__parent:
+            self.__parent.gameobject.children.append(self.gameobject)
 
     def get_model_matrix(self) -> glm.mat4:
         # Start with identity

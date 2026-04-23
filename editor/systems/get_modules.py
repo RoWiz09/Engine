@@ -8,6 +8,7 @@ if TYPE_CHECKING:
     from ghost_engine.core.input import Input
     
     from ghost_engine.core.input import KeyCodes, MouseButtons
+    from ghost_engine.behavior import EditorField
 
 if TYPE_CHECKING:
     logger: type[Logger] = None
@@ -15,16 +16,18 @@ if TYPE_CHECKING:
     input_handler: type[Input] = None
     key_codes: type[KeyCodes] = None
     mouse_buttons: type[MouseButtons] = None
+    editor_field: type[EditorField]
 
 else:
-    logger = None
-    scene_manager = None
-    input_handler = None
-    key_codes = None
-    mouse_buttons = None
+    logger: type = None
+    scene_manager: type = None
+    input_handler: type = None
+    key_codes: type = None
+    mouse_buttons: type = None
+    editor_field: type = None
 
 def get_modules(base_path: str):
-    global logger, scene_manager, input_handler, key_codes, mouse_buttons
+    global logger, scene_manager, input_handler, key_codes, mouse_buttons, editor_field
     if base_path not in sys.path:
         sys.path.insert(0, base_path)
 
@@ -51,6 +54,7 @@ def get_modules(base_path: str):
 
     key_codes = getattr(init_module, "KeyCodes") 
     mouse_buttons = getattr(init_module, "MouseButtons")
+    editor_field = getattr(sys.modules["ghost_engine.behavior"], "EditorField")
     getattr(init_module, "setup")()
 
     return logger, scene_manager, input_handler

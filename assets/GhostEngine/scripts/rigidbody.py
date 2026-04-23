@@ -5,10 +5,10 @@ from pyglm import glm
 class Rigidbody(Behavior):
     velocity = glm.vec3(0)
 
-    gravity = EditorField("float", -9.8)
+    gravity = EditorField(float, -9.8)
 
-    friction = EditorField("float", 5)
-    mass = EditorField("float", 1)
+    friction = EditorField(float, 5)
+    mass = EditorField(float, 1)
     def __init__(self, gameobject):
         super().__init__(gameobject)
 

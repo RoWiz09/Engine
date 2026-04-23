@@ -7,10 +7,10 @@ import glfw
 class Camera(Behavior, CamType):
     category = "Rendering"
 
-    rotation_mod = EditorField("vec3", glm.vec3())
-    position_mod = EditorField("vec3", glm.vec3())
+    rotation_mod = EditorField(glm.vec3, glm.vec3())
+    position_mod = EditorField(glm.vec3, glm.vec3())
 
-    fov = EditorField("float", 60.0)
+    fov = EditorField(float, 60.0)
     def __init__(self, gameobject):
         super().__init__(gameobject)
     

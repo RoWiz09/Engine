@@ -9,12 +9,12 @@ from ghost_engine.math import clamp
 from pyglm import glm
 
 class FPSController(Behavior):
-    speed = EditorField("int", 10)
+    speed = EditorField(int, 10)
 
-    can_jump = EditorField("bool", True)
-    jump_force = EditorField("float", 5.0)
+    can_jump = EditorField(bool, True)
+    jump_force = EditorField(float, 5.0)
 
-    mouse_sens = EditorField("float", 1.0)
+    mouse_sens = EditorField(float, 1.0)
     
     def __init__(self, gameobject):
         super().__init__(gameobject)

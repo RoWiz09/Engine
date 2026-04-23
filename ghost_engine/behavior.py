@@ -228,7 +228,7 @@ class Behavior:
         pass
 
 class EditorField:
-    def __init__(self, field_type, default=None):
+    def __init__(self, field_type: type, default=None):
         self.type = field_type
         self.default = default
         self.name = None
@@ -242,5 +242,5 @@ class EditorField:
         return instance.__dict__.get(self.name, self.default)
 
     def __set__(self, instance, value):
-        instance.__dict__[self.name] = value
+        instance.__dict__[self.name] = self.type(value)
         
