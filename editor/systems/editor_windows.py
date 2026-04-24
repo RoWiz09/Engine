@@ -94,17 +94,16 @@ class Inspector(EditorUiWindow):
             data.name = name_in.get_value()
             Hierarchy.rebuild_windows()
 
-        renderable_width = (self.draw_data.size - (self.draw_data.padding * 2)).x
         # Name Data
-        name_in = InputField(self, renderable_width, 30, hint="Object Name...", starting_message=data.name)
+        name_in = InputField(self, self.renderable_width, 30, hint="Object Name...", starting_message=data.name)
         name_in.command = lambda n=name_in: set_name(n)
         name_in.default_val = ""
 
         HorizontalLine(self)
 
         # Transform Data
-        TextElement(self, "Transform", renderable_width, 12).set_text_size(12).set_anchor("lm", TextRenderAnchor.middle_left)
-        parentField = DropField(self, renderable_width, 30, "Parent Object", DragData(
+        TextElement(self, "Transform", self.renderable_width, 12).set_text_size(12).set_anchor("lm", TextRenderAnchor.middle_left)
+        parentField = DropField(self, self.renderable_width, 30, "Parent Object", DragData(
             data.transform.parent.gameobject, data.transform.parent.gameobject.name) if data.transform.parent else None)
         def get_children(obj: Object):
             children = set()
@@ -137,7 +136,7 @@ class Inspector(EditorUiWindow):
 
         for component in data.components:
             comp_class = type(component)
-            TextElement(self, comp_class.__name__, renderable_width, 30)
+            TextElement(self, comp_class.__name__, self.renderable_width, 30)
 
             for var_name, var_data in vars(comp_class).items():
                 if isinstance(var_data, get_modules.editor_field):
@@ -146,10 +145,10 @@ class Inspector(EditorUiWindow):
                         build_vec3_input(self, var)
 
                     elif var_data.type == float:
-                        InputField(self, renderable_width, 20, var_name, str(var), float)
+                        InputField(self, self.renderable_width, 20, var_name, str(var), float)
 
                     elif var_data.type == str:
-                        InputField(self, renderable_width, 20, var_name, var, str)
+                        InputField(self, self.renderable_width, 20, var_name, var, str)
                     
                     elif var_data.type == bool:
                         Checkbox(self, var)
@@ -241,3 +240,11 @@ class Hierarchy(EditorUiWindow):
             self.old = False
             
         super().draw(editor)
+
+class Scenes(EditorUiWindow):
+    name = "Scenes"
+    def __init__(self):
+        super().__init__()
+        self.scene_manager = get_modules.scene_manager()
+        self.draw_data.padding = glm.vec2(10, 10)
+        ListView(self, self.renderable_width, self.renderable_height, self.scene_manager.scenes)

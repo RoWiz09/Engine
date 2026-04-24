@@ -310,6 +310,14 @@ class EditorUiWindow:
                     self.focused_elem.focus()
 
                     break
+    
+    @property
+    def renderable_width(self):
+        return self.draw_data.size.x - self.draw_data.padding.x * 2
+    
+    @property
+    def renderable_height(self):
+        return self.draw_data.size.y - self.draw_data.padding.y * 2 - 30 
 
 class UiElement:
     can_claim_focus: bool = False
@@ -1044,6 +1052,98 @@ class HorizontalLine(UiElement):
     
     def resize(self, size):
         return super().resize(size)
+    
+class ListView(UiElement):
+    can_claim_focus = True
+    class ListElement(UiElement):
+        def __init__(self, parent: ListView, value: str):
+            width = parent.size.x - parent.padding.x * 2
+            height = 20
+
+            super().__init__(parent, width, height)
+            self.__val = value
+
+        def build_sprite(self):
+            if self.focused:
+                col = (69, 73, 78)
+            else:
+                col = (58, 61, 65)
+
+            img = Image.new("RGBA", (int(self.rect.size.x), int(self.rect.size.y)), (0, 0, 0, 0))
+            ImageDraw.Draw(img, "RGBA").rounded_rectangle(
+                (0, 0, int(self.rect.size.x), int(self.rect.size.y)), radius=7, outline=col, width=2)
+            
+            return img
+
+        @property
+        def value(self):
+            return self.value
+
+    def __init__(self, parent, width, height, values: list[str] = []):
+        super().__init__(parent, width, height)
+        self.padding = glm.vec2(5, 5)
+
+        self.__values = values
+        self.ui_elements: list[__class__.ListElement] = []
+
+        print(height)
+        self.rebuild_elements()
+
+        self.was_focused = False
+
+    def extend_values(self, new_vals: list[str]):
+        self.__values.extend(new_vals)
+
+    def set_values(self, vals: list[str]):
+        self.__values = vals
+
+    def rebuild_elements(self):
+        for elem in self.__values:
+            list_elem = self.ListElement(self, elem)
+
+    def build_sprite(self):
+        if self.focused:
+            col = (69, 73, 78)
+        else:
+            col = (58, 61, 65)
+
+        img = Image.new("RGBA", (int(self.rect.size.x), int(self.rect.size.y)), (0, 0, 0, 0))
+        ImageDraw.Draw(img, "RGBA").rounded_rectangle(
+            (0, 0, int(self.rect.size.x), int(self.rect.size.y)), radius=7, outline=col, width=2)
+        
+        return img
+    
+    def focus(self):
+        print("WOW!")
+        return super().focus()
+    
+    def draw(self, editor, pos):
+        if self.rect.pos != pos:
+            self.rect.move_to(pos)
+
+        if self.focused != self.was_focused:
+            self.sprite = self.build_sprite()
+            self.rebuild_texture()
+            self.was_focused = self.focused
+            print("WOW!")
+
+        gl.glEnable(gl.GL_STENCIL_TEST)
+        gl.glClearStencil(0)
+        gl.glClear(gl.GL_STENCIL_BUFFER_BIT)
+        gl.glStencilOp(gl.GL_KEEP, gl.GL_KEEP, gl.GL_REPLACE)
+        gl.glStencilFunc(gl.GL_ALWAYS, 1, 0xFF)
+
+        super().draw(editor, pos)
+
+        gl.glStencilFunc(gl.GL_EQUAL, 1, 0xFF)
+        gl.glStencilOp(gl.GL_KEEP, gl.GL_KEEP, gl.GL_KEEP)
+
+        pos_ = pos + self.padding
+        for elem in self.ui_elements:
+            elem.draw(editor, pos_)
+            pos_.y += elem.get_height()
+
+        # super().draw(editor, pos)
 
 def format_num(num):
     output = f"{round(num, 10):g}"

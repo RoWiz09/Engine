@@ -91,18 +91,20 @@ class Window:
 
         self.docker = Docker()
         scene_viewer = SceneView()
-        scene_viewer2 = Hierarchy()
-        scene_viewer3 = Inspector()
+        hierarchy = Hierarchy()
+        inspector = Inspector()
+        scenes = Scenes()
         root = self.docker.dock(self.docker.root, scene_viewer, "right")
-        self.docker.dock(root.child_a, scene_viewer2)
+        self.docker.dock(root.child_a, hierarchy)
         self.docker.set_ratio(root, 0.15, self)
-        self.docker.dock(root.child_b, scene_viewer3, "right")
+        self.docker.dock(root.child_b, inspector, "right")
         self.docker.compute_layout(self)
         self.docker.set_ratio(root.child_b, 0.75, self)
 
         self.drawer.add_window_data(scene_viewer)
-        self.drawer.add_window_data(scene_viewer2)
-        self.drawer.add_window_data(scene_viewer3)
+        self.drawer.add_window_data(hierarchy)
+        self.drawer.add_window_data(inspector)
+        self.drawer.add_window_data(scenes)
 
         self.editor_cam = editor_camera(self.input_handler)
         self.moving_camera = False
