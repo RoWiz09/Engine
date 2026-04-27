@@ -245,6 +245,7 @@ class Scenes(EditorUiWindow):
     name = "Scenes"
     def __init__(self):
         super().__init__()
+        self.resize(200, 150)
         self.scene_manager = get_modules.scene_manager()
         self.draw_data.padding = glm.vec2(10, 10)
         ListView(self, self.renderable_width, self.renderable_height, self.scene_manager.scenes)

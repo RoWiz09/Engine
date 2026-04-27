@@ -1062,6 +1062,11 @@ class ListView(UiElement):
 
             super().__init__(parent, width, height)
             self.__val = value
+            self.__label = TextElement(None, self.__val, width, height)
+        
+        def draw(self, editor, pos):
+            super().draw(editor, pos)
+            self.__label.draw(editor, pos)
 
         def build_sprite(self):
             if self.focused:
