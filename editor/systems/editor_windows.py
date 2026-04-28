@@ -38,18 +38,15 @@ class SceneView(EditorUiWindow):
         gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, 0)
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
 
-    # RoWiz (4/27/26):
-    # Disabled, as there is now a more optimized method.
+    def draw(self, editor):
+        window = glfw.get_current_context()
+        size = glfw.get_window_size(window)
 
-    # def draw(self, editor):
-    #     window = glfw.get_current_context()
-    #     size = glfw.get_window_size(window)
-
-    #     gl.glViewport(0, 0, int(self.view.size.x), int(self.view.size.y))
-    #     editor.render_scene(self.fbo)
-    #     gl.glViewport(0, 0, *size)
+        gl.glViewport(0, 0, int(self.view.size.x), int(self.view.size.y))
+        editor.render_scene()
+        gl.glViewport(0, 0, *size)
         
-    #     super().draw(editor)   
+        super().draw(editor)   
 
     def resize(self, new_width, new_height):
         super().resize(new_width, new_height)     
@@ -248,8 +245,38 @@ class Scenes(EditorUiWindow):
         self.scene_manager = get_modules.scene_manager()
         self.draw_data.padding = glm.vec2(10, 10)
         self.list_view = ListView(self, self.renderable_width, self.renderable_height, self.scene_manager.scenes)
+        self.list_view.select_item_callback = self.select_scene_callback
+
+        self.selected_scene: ListValue = None
+        def open_scene():
+            self.scene_manager.load_scene(self.selected_scene.val, False)
+
+        self.horiz_group = HorizontalLayout(self, self.renderable_width, 50, [
+            scene_label := TextElement(None, "", 1, 1),
+            scene_index := TextElement(None, "", 1, 1),
+            Button(None, 4, 4, "Open", open_scene)
+        ])
+        self.horiz_group.padding.x = 5
+        self.horiz_group.padding.y = 5
+        self.horiz_group.rebuild_elems()
+        self.scene_label = scene_label
+        self.scene_index = scene_index
+
+        self.horiz_group.shown = False
+
+    def select_scene_callback(self, info: ListValue):
+        self.scene_label.message = info.val
+        self.scene_label.old = True
+
+        self.scene_index.message = str(info.index)
+        self.scene_index.old = True
+
+        self.horiz_group.shown = True
+        self.list_view.shown = False
+        self.selected_scene = info
 
     def resize(self, new_width, new_height):
         self.list_view.resize(glm.vec2(new_width, new_height - 30) - self.draw_data.padding * 2)
+        self.horiz_group.resize(glm.vec2(new_width, 50) - self.draw_data.padding * 2)
 
         super().resize(new_width, new_height)

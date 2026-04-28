@@ -8,6 +8,7 @@ from .input import Input, KeyCodes
 from ..behavior import *
 
 from ..rendering.camera_type import CamType
+from ..rendering.light_type import LightType
 
 
 from pyglm import glm
@@ -226,6 +227,9 @@ class SceneManager:
                 
 
     def _instantiate_scene_objects(self, scene_data: dict) -> list[Object]:
+        for lights in LightType.lights.values():
+            lights.clear()
+            
         scene_objects = []
             
         game_objects: list[dict] = scene_data["objects"]

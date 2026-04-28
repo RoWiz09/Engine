@@ -105,8 +105,8 @@ class Window:
         self.drawer.add_window_data(scenes)
 
         root = self.docker.dock(self.docker.root, scene_viewer, "right")
-        self.docker.dock(root.child_a, scenes, "top")
-        self.docker.dock(root.child_a, hierarchy, "bottom")
+        # self.docker.dock(root.child_a, scenes, "top")
+        self.docker.dock(root.child_a, hierarchy)
         self.docker.set_ratio(root.child_a, 0.15, self)
         self.docker.set_ratio(root, 0.15, self)
         # self.docker.dock(root.child_a, hierarchy)
@@ -125,7 +125,8 @@ class Window:
     def should_close(self):
         return glfw.window_should_close(self.window)
 
-    def render_scene(self, frame_buffer = 0):
+    def render_scene(self, frame_buffer = None):
+        frame_buffer = frame_buffer if frame_buffer else self.scene_framebuffer
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, frame_buffer)
         gl.glEnable(gl.GL_DEPTH_TEST)
 
@@ -159,13 +160,8 @@ class Window:
         width, height = glfw.get_window_size(self.window)
         gl.glViewport(0, 0, width, height)
 
-        gl.glClearColor(0.12, 0.12, 0.12, 1)
-        gl.glClear(gl.GL_DEPTH_BUFFER_BIT | gl.GL_COLOR_BUFFER_BIT)
-
         if self.moving_camera:
             self.editor_cam.update(dt)
-
-        self.render_scene(self.scene_framebuffer)
 
         # Rendering
         self.docker.update(self)

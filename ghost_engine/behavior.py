@@ -43,7 +43,7 @@ class AdvancedBehavior:
         if not issubclass(cls, Behavior):
             Logger("ADVANCED BEHAVIOR").log_fatal("Cannot use AdvancedBehavior on a non-behavior object!")
         
-        enabled = getattr(cls, "enabled")
+        enabled = getattr(cls, "enabled", None)
         if isinstance(enabled, property):
             original_setter = enabled.fset
             def new_enabled_setter(inst, val):

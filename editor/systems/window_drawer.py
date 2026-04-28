@@ -25,6 +25,8 @@ else:
     KeyCodes: TypeAlias = Any
     MouseButtons: TypeAlias = Any
     Input: TypeAlias = Any
+
+from dataclasses import dataclass
  
 @dataclass
 class DragData:
@@ -285,8 +287,9 @@ class EditorUiWindow:
         pos = self.draw_data.pos + self.draw_data.padding
         pos.y += 30 
         for child in self.ui_elements:
-            child.draw(editor, pos)
-            pos.y += child.get_height() + self.draw_data.padding.y
+            if child.shown:
+                child.draw(editor, pos)
+                pos.y += child.get_height() + self.draw_data.padding.y
 
     def handle_input(self, key_codes: type[KeyCodes], mouse_buttons: type[MouseButtons], input_handler: Input):
         global HELD_DRAG_DATA
@@ -313,6 +316,9 @@ class EditorUiWindow:
 
         else:
             for elem in self.ui_elements:
+                if not elem.shown:
+                    continue
+                
                 if not elem.can_claim_focus:
                     continue
 
@@ -1009,6 +1015,13 @@ class HorizontalLayout(UiElement):
         
         return img
 
+    def rebuild_elems(self):
+        size = self.size - self.padding * 2
+        for elem in self.elems:
+            width_ = ((size.x) - (self.padding.x * (len(self.elems) - 1))) / len(self.elems) 
+            height_ = size.y
+            elem.resize(glm.vec2(width_, height_))
+
     def resize(self, size):
         width = size.x
         for elem in self.elems:
@@ -1073,13 +1086,14 @@ class HorizontalLine(UiElement):
 class ListView(UiElement):
     can_claim_focus = True
     class ListElement(UiElement):
-        def __init__(self, parent: ListView, value: str):
+        def __init__(self, parent: ListView, value: str, idx: int):
+            self.selected = False
             width = parent.size.x - parent.padding.x * 2
             height = 20
 
             super().__init__(parent, width, height)
-            self.__val = value
-            self.__label = TextElement(None, self.__val, width, height)
+            self.__val = ListValue(value, idx)
+            self.__label = TextElement(None, self.__val.val, width, height)
             self.was_focused = False
         
         def draw(self, editor, pos):
@@ -1095,7 +1109,7 @@ class ListView(UiElement):
             self.__label.draw(editor, pos)
 
         def build_sprite(self):
-            if self.focused:
+            if self.focused or self.selected:
                 col = (69, 73, 78)
             else:
                 col = (58, 61, 65)
@@ -1108,11 +1122,15 @@ class ListView(UiElement):
 
         @property
         def value(self):
-            return self.value
+            return self.__val
         
         def resize(self, size):
             super().resize(size)
             self.__label.resize(size)
+
+        def handle_input(self, keycodes, mouse_buttons, input_handler):
+            self.selected = input_handler.get_mouse_button_up(mouse_buttons.LEFT)
+            return self.selected
 
     def __init__(self, parent, width, height, values: list[str] = []):
         super().__init__(parent, width, height)
@@ -1122,7 +1140,10 @@ class ListView(UiElement):
         self.ui_elements: list[__class__.ListElement] = []
         self.rebuild_elements()
 
-        self.focused_elem = None
+        self.select_item_callback = None
+
+        self.focused_elem: __class__.ListElement = None
+        self.selected_elem: __class__.ListElement = None
 
         self.was_focused = False
     
@@ -1140,8 +1161,8 @@ class ListView(UiElement):
     def rebuild_elements(self):
         self.focused_elem = None
         self.ui_elements.clear()
-        for elem in self.__values:
-            self.ListElement(self, elem)
+        for idx, elem in enumerate(self.__values):
+            self.ListElement(self, elem, idx)
 
     def build_sprite(self):
         if self.focused:
@@ -1200,13 +1221,29 @@ class ListView(UiElement):
                 self.focused_elem = None
                 return
 
-            self.focused_elem.handle_input(keycodes, mouse_buttons, input_handler)
+            if self.focused_elem.handle_input(keycodes, mouse_buttons, input_handler):
+                if self.selected_elem:
+                    self.selected_elem.selected = False
+                self.selected_elem = self.focused_elem
+                if self.select_item_callback:
+                    self.select_item_callback(self.selected_elem.value)
             return
 
         for elem in self.ui_elements:
             if elem.rect.collide_point(glm.vec2(input_handler.mouse_pos)):
                 self.focused_elem = elem
                 elem.focus()
+
+    def get_selected(self):
+        if self.focused_elem and self.focused_elem.selected:
+            return self.focused_elem.value
+
+        return None
+    
+@dataclass
+class ListValue:
+    val: Any
+    index: int
 
 def format_num(num):
     output = f"{round(num, 10):g}"

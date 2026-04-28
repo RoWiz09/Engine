@@ -51,19 +51,6 @@ class DockNode:
         self.windows = node.windows.copy()
 
     def split_node(self, node_a: DockNode, node_b: DockNode, split: Split):
-        if not self.windows == []:
-            if node_a.windows == []:
-                node_a.windows = self.windows
-            
-            elif node_b.windows == []:
-                node_b.windows = self.windows
-
-            else:
-                modules.Logger("EDITOR").log_error("A node has failed be split, due to having windows which cannot be distributed!")
-                return
-
-            self.windows = []
-
         self.child_a = node_a
         self.child_a.parent = self
         self.child_b = node_b
@@ -281,6 +268,18 @@ class Docker:
             if cur_split is None:
                 child_a = DockNode(self)
                 child_b = DockNode(self)
+
+                if node.windows != []:
+                    if split in ("top", "left"):
+                        child_b.windows = node.windows
+                        child_b.selected_window = node.selected_window
+
+                    else:
+                        child_a.windows = node.windows
+                        child_a.selected_window = node.selected_window
+                    node.windows = []
+
+                print("wows", window.name)
                 if split in ("top", "left"):
                     child_a.windows.append(window)
                     child_a.selected_window = len(child_a.windows) - 1
@@ -292,6 +291,7 @@ class Docker:
                 node.split_node(child_a, child_b, split_dir)
 
             elif split_dir == cur_split:
+                print("wow", window.name)
                 if split in ("top", "left"):
                     node.child_a.windows.append(window)
                     node.child_a.selected_window = len(node.child_a.windows) - 1
@@ -301,7 +301,6 @@ class Docker:
                     node.child_b.selected_window = len(node.child_b.windows) - 1
 
             else:
-                print("Wow!")
                 child_a = DockNode(self)
                 child_b = DockNode(self)
 
