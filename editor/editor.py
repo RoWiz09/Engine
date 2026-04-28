@@ -54,6 +54,9 @@ class Window:
 
         self.logger = Logger("EDITOR")
 
+        # Set the modules.editor_window variable, for easy, global access of this instance.
+        modules.editor_window = self
+
         glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
         glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
         glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
@@ -64,7 +67,6 @@ class Window:
         self.logger.log_debug("GLFW initalized successfully!")
 
         gl.glEnable(gl.GL_CULL_FACE)
-        # gl.glEnable(gl.GL_DEPTH_TEST)
         gl.glEnable(gl.GL_BLEND)
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
 
@@ -83,6 +85,8 @@ class Window:
             os.environ["project"] = self.project_data["name"]
 
             glfw.set_window_title(self.window, "GhostEngine Editor - " + self.project_data["name"])
+
+        self.scene_framebuffer = gl.glGenFramebuffers(1)
         self.scene_manager = SceneManager()
         self.scene_manager.load_scene_index(0, alert_scripts = False)
         Window._created = True
@@ -94,17 +98,22 @@ class Window:
         hierarchy = Hierarchy()
         inspector = Inspector()
         scenes = Scenes()
-        root = self.docker.dock(self.docker.root, scene_viewer, "right")
-        self.docker.dock(root.child_a, hierarchy)
-        self.docker.set_ratio(root, 0.15, self)
-        self.docker.dock(root.child_b, inspector, "right")
-        self.docker.compute_layout(self)
-        self.docker.set_ratio(root.child_b, 0.75, self)
 
         self.drawer.add_window_data(scene_viewer)
         self.drawer.add_window_data(hierarchy)
         self.drawer.add_window_data(inspector)
         self.drawer.add_window_data(scenes)
+
+        root = self.docker.dock(self.docker.root, scene_viewer, "right")
+        self.docker.dock(root.child_a, scenes, "top")
+        self.docker.dock(root.child_a, hierarchy, "bottom")
+        self.docker.set_ratio(root.child_a, 0.15, self)
+        self.docker.set_ratio(root, 0.15, self)
+        # self.docker.dock(root.child_a, hierarchy)
+
+        self.docker.dock(root.child_b, inspector, "right")
+        self.docker.set_ratio(root.child_b, 0.75, self)
+        self.docker.compute_layout(self)
 
         self.editor_cam = editor_camera(self.input_handler)
         self.moving_camera = False
@@ -155,6 +164,8 @@ class Window:
 
         if self.moving_camera:
             self.editor_cam.update(dt)
+
+        self.render_scene(self.scene_framebuffer)
 
         # Rendering
         self.docker.update(self)

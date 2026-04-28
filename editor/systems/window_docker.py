@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Optional, Literal, Any, TypeAlias
 
-from .editor_windows import EditorUiWindow
+from .editor_windows import EditorUiWindow, WindowDrawer
 from . import get_modules as modules
 
 from pyglm import glm
@@ -29,6 +29,7 @@ class DockNode:
         # RoWiz (4/8/26):
         # Still need to implement tabs in the UI, but changed this to a list anyway.
         self.windows: list[EditorUiWindow] = []
+        self.selected_window = None
 
         docker.nodes.append(self)
 
@@ -87,9 +88,28 @@ class DockNode:
         else:
             modules.logger("EDITOR").log_warning("Tried to get which child a node was when the node wasn't a child of the parent!")
             return
+        
+    def render(self, editor: Window) -> bool:
+        global Input
+        if self.is_split():
+            return False
+        
+        if self.selected_window is None:
+            return False
+        
+        window = self.windows[self.selected_window]
+        window.draw(editor)
+
+        mouse_pos = glm.vec2(*modules.input_handler().mouse_pos)
+        if window.rect.collide_point(mouse_pos):
+            return True
+        
+        return False
 
 class Docker:
+    INST: Docker = None
     def __init__(self):
+        __class__.INST = self
         self.nodes: list[DockNode] = [] 
         self.root = DockNode(self)
 
@@ -129,17 +149,29 @@ class Docker:
         return base_size, base_pos
     
     def set_ratio(self, node: DockNode, ratio: float, editor: Window):
+        """
+        Sets the split ratio for `node` to `ratio`.
+
+        Args:
+            node (DockNode): The node to set the ratio of.
+            ratio (float): The split ratio.
+            editor (Window): The editor window class instance.
+        """
         if not 0 <= ratio <= 1:
             modules.logger("EDITOR").log_warning("A node's split ratio was set to be outside of it's range!")
             return
         
         node.split_ratio = ratio
 
-        self.compute_node(node, editor)
+        # self.compute_node(node, editor) 
 
     def compute_node(self, node: DockNode, editor: Window):
         """
-        Computes a node tree, starting with `node`. Used when computing a whole tree from `root` would be inefficient.
+        Computes a node tree, starting with `node`. Used when computing a whole tree from `Docker.root` would be inefficient or overkill.
+
+        Args:   
+            node (DockNode): The node to start computing at.
+            editor (Window): The editor window class instance.
         """
 
         size, pos = self.get_node_info(node, editor)
@@ -176,6 +208,12 @@ class Docker:
                     editor_window.move(*node.est_pos)
 
     def compute_layout(self, editor: Window):
+        """
+        Computes the layout tree from `Docker.root`. Used when computing from a node's tree wouldn't work. 
+
+        Args:
+            editor (Window): The editor window class instance.
+        """
         self.root.est_size = glm.vec2(editor.size())
         self.root.est_pos = glm.vec2(0, 0)
 
@@ -209,40 +247,95 @@ class Docker:
                     editor_window.move(*node.est_pos)
 
     def dock(self, node: DockNode, window: EditorUiWindow, split: Optional[SplitDirection] = None):
+        """
+        Dock a window in `node`.
+
+        Args:
+            node (DockNode): The DockNode to dock inside.
+            window (EditorUiWindow): The EditorUiWindow instance to dock.
+            split (Optional[SplitDirection], optional): The direction of the split. Defaults to None.
+
+        Returns:
+            DockNode: the docked node.
+        """
         if not node in self.nodes:
             modules.logger("EDITOR").log_warning(f"Tried to dock {window.name} in a non-existent node!")
-            return
+            return node
+        
+        # Flag the window as docked.
+        setattr(window, "docked", True)
+        WindowDrawer.INST.floating_windows.remove(window)
         
         # If there is a split, handle it accordingly
         if split:
-            split_direction: Split = None
+            # RoWiz (4/27/26)
+            # Completely reworked the split system, as it was bad and didn't work.
+            split_dir: Split
             if split in ("top", "bottom"):
-                split_direction = "horizontal"
+                split_dir = "horizontal"
+            
+            else:
+                split_dir = "vertical"
+
+            cur_split = node.split_side
+            if cur_split is None:
+                child_a = DockNode(self)
+                child_b = DockNode(self)
+                if split in ("top", "left"):
+                    child_a.windows.append(window)
+                    child_a.selected_window = len(child_a.windows) - 1
+
+                else:
+                    child_b.windows.append(window)
+                    child_b.selected_window = len(child_b.windows) - 1
+
+                node.split_node(child_a, child_b, split_dir)
+
+            elif split_dir == cur_split:
+                if split in ("top", "left"):
+                    node.child_a.windows.append(window)
+                    node.child_a.selected_window = len(node.child_a.windows) - 1
+
+                else:
+                    node.child_b.windows.append(window)
+                    node.child_b.selected_window = len(node.child_b.windows) - 1
 
             else:
-                split_direction = "vertical"
-
-            child_a, child_b = None, None
-            if split in ("left", "top"):
+                print("Wow!")
                 child_a = DockNode(self)
-                child_a.windows.append(window)
-
                 child_b = DockNode(self)
 
-            else:
-                child_b = DockNode(self)
-                child_b.windows.append(window)
+                if split in ("top", "left"):
+                    child_a.windows.append(window)
+                    child_a.selected_window = len(child_a.windows) - 1
 
-                child_a = DockNode(self)
+                    child_b.set_data_from_node(node)
 
-            node.split_node(child_a, child_b, split_direction)
-            return node
-        
+                else:
+                    child_b.windows.append(window)
+                    child_b.selected_window = len(child_b.windows) - 1
+
+                    child_a.set_data_from_node(node)
+
+                node.split_node(child_a, child_b, split_dir)
+
         else:
             # Just dock the window!
             node.windows.append(window)
+            node.selected_window = len(node.windows) - 1
+
+        return node
+
     
     def undock(self, node: DockNode, window: EditorUiWindow):
+        """
+        Undocks `window` from `node`
+
+        Args:
+            node (DockNode): The node to undock from.
+            window (EditorUiWindow): The window to undock.
+        """
+        delattr(window, "docked")
         if not node in self.nodes:
             modules.logger("EDITOR").log_warning(f"Tried to undock {window.name} from a non-existent node!")
             return
@@ -267,5 +360,20 @@ class Docker:
                 self.nodes.remove(other_child)
 
     def update(self, editor: Window):
+        """
+        Updates dock nodes if `Docker.root` isn't the correct size.
+
+        Args:
+            editor (Window): The editor window class instance.
+        """
         if self.root.est_size != glm.vec2(*editor.size()):
             self.compute_layout(editor)
+
+    def draw(self, editor: Window):
+        focused = None
+        for node in self.nodes:
+            focus_state = node.render(editor)
+            if focus_state:
+                focused = node.windows[node.selected_window]
+
+        return focused

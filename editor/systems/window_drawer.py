@@ -34,7 +34,7 @@ class DragData:
 HELD_DRAG_DATA: DragData = None
 
 class WindowDrawer:
-    INST = None
+    INST: WindowDrawer = None
     INITALIZED = False
     def __new__(cls) -> WindowDrawer:
         if __class__.INST is None:
@@ -47,8 +47,13 @@ class WindowDrawer:
             return
         
         setup()
+        self.floating_windows: set[EditorUiWindow] = set()
         self.windows: set[EditorUiWindow] = set()
+
         self.focused_window: EditorUiWindow = None
+
+        from .window_docker import Docker
+        self.docker = Docker
 
         __class__.INITALIZED = True
 
@@ -59,9 +64,16 @@ class WindowDrawer:
         WINDOW_SHADER.use()
         WINDOW_SHADER.set_mat4("uProjection", ortho)
 
-        for window in self.windows:
+        focused = self.docker.INST.draw(editor)
+        if not self.focused_window:
+            self.focused_window = focused
+
+        elif self.focused_window and not self.focused_window.focused_elem:
+            self.focused_window = focused
+
+        for window in self.floating_windows:
             window.draw(editor)
-            
+
             if self.focused_window and self.focused_window.focused_elem:
                 continue
 
@@ -74,6 +86,8 @@ class WindowDrawer:
 
     def add_window_data(self, window_data: EditorUiWindow):
         self.windows.add(window_data)
+        if not hasattr(window_data, "docked"):
+            self.floating_windows.add(window_data)
 
 WINDOW_SHADER = None
 VBO, VAO, EBO = None, None, None
@@ -349,9 +363,15 @@ class UiElement:
         self.post_render_hook = None
 
         self.draggable_data: DragData = None
+        self.active = True
+        self.shown = True
 
     def update_rect(self, new_pos: glm.vec2):
         self.rect.move_to(new_pos)
+
+    @final
+    def toggle_hidden(self):
+        self.shown = not self.shown
 
     def resize_to_fill_window(self):
         self.size = glm.vec2(self.parent.draw_data.size.x - self.parent.draw_data.padding.x * 2, 
@@ -1050,9 +1070,6 @@ class HorizontalLine(UiElement):
         draw.line((0, 16, int(self.size.x), 16), (59, 63, 68), width=2)
         return img
     
-    def resize(self, size):
-        return super().resize(size)
-    
 class ListView(UiElement):
     can_claim_focus = True
     class ListElement(UiElement):
@@ -1063,8 +1080,17 @@ class ListView(UiElement):
             super().__init__(parent, width, height)
             self.__val = value
             self.__label = TextElement(None, self.__val, width, height)
+            self.was_focused = False
         
         def draw(self, editor, pos):
+            if self.rect.pos != pos:
+                self.rect.move_to(glm.vec2(*pos))
+
+            if self.focused != self.was_focused:
+                self.sprite = self.build_sprite()
+                self.rebuild_texture()
+                self.was_focused = self.focused
+
             super().draw(editor, pos)
             self.__label.draw(editor, pos)
 
@@ -1083,6 +1109,10 @@ class ListView(UiElement):
         @property
         def value(self):
             return self.value
+        
+        def resize(self, size):
+            super().resize(size)
+            self.__label.resize(size)
 
     def __init__(self, parent, width, height, values: list[str] = []):
         super().__init__(parent, width, height)
@@ -1090,11 +1120,16 @@ class ListView(UiElement):
 
         self.__values = values
         self.ui_elements: list[__class__.ListElement] = []
-
-        print(height)
         self.rebuild_elements()
 
+        self.focused_elem = None
+
         self.was_focused = False
+    
+    def resize(self, size):
+        super().resize(size)
+        for elem in self.ui_elements:
+            elem.resize(glm.vec2(self.size.x - self.padding.x * 2, elem.size.y))
 
     def extend_values(self, new_vals: list[str]):
         self.__values.extend(new_vals)
@@ -1103,8 +1138,10 @@ class ListView(UiElement):
         self.__values = vals
 
     def rebuild_elements(self):
+        self.focused_elem = None
+        self.ui_elements.clear()
         for elem in self.__values:
-            list_elem = self.ListElement(self, elem)
+            self.ListElement(self, elem)
 
     def build_sprite(self):
         if self.focused:
@@ -1119,18 +1156,16 @@ class ListView(UiElement):
         return img
     
     def focus(self):
-        print("WOW!")
         return super().focus()
     
     def draw(self, editor, pos):
         if self.rect.pos != pos:
-            self.rect.move_to(pos)
+            self.rect.move_to(glm.vec2(*pos))
 
         if self.focused != self.was_focused:
             self.sprite = self.build_sprite()
             self.rebuild_texture()
             self.was_focused = self.focused
-            print("WOW!")
 
         gl.glEnable(gl.GL_STENCIL_TEST)
         gl.glClearStencil(0)
@@ -1148,7 +1183,30 @@ class ListView(UiElement):
             elem.draw(editor, pos_)
             pos_.y += elem.get_height()
 
+        gl.glDisable(gl.GL_STENCIL_TEST)
         # super().draw(editor, pos)
+
+    def lose_focus(self):
+        if self.focused_elem:
+            self.focused_elem.lose_focus()
+            self.focused_elem = None
+
+        return super().lose_focus()
+
+    def handle_input(self, keycodes, mouse_buttons, input_handler):
+        if self.focused_elem:
+            if not self.focused_elem.rect.collide_point(glm.vec2(*input_handler.mouse_pos)):
+                self.focused_elem.lose_focus()
+                self.focused_elem = None
+                return
+
+            self.focused_elem.handle_input(keycodes, mouse_buttons, input_handler)
+            return
+
+        for elem in self.ui_elements:
+            if elem.rect.collide_point(glm.vec2(input_handler.mouse_pos)):
+                self.focused_elem = elem
+                elem.focus()
 
 def format_num(num):
     output = f"{round(num, 10):g}"

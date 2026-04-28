@@ -15,13 +15,10 @@ class SceneView(EditorUiWindow):
     name = "Scene"
     def __init__(self):
         super().__init__()
-
-        self.fbo = gl.glGenFramebuffers(1)
-
         self.view = UiElement(self, 0, 0)
         self.view.resize_callback = self.view_resize_callback
 
-        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.fbo)
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, get_modules.editor_window.scene_framebuffer)
         gl.glFramebufferTexture2D(gl.GL_READ_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0, gl.GL_TEXTURE_2D, self.view.texture, 0)
 
         self.rbo = gl.glGenRenderbuffers(1)
@@ -32,7 +29,7 @@ class SceneView(EditorUiWindow):
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
 
     def view_resize_callback(self, view: UiElement):
-        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.fbo)
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, get_modules.editor_window.scene_framebuffer)
         gl.glFramebufferTexture2D(gl.GL_READ_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0, gl.GL_TEXTURE_2D, self.view.texture, 0)
 
         gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, self.rbo)
@@ -41,15 +38,18 @@ class SceneView(EditorUiWindow):
         gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, 0)
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
 
-    def draw(self, editor):
-        window = glfw.get_current_context()
-        size = glfw.get_window_size(window)
+    # RoWiz (4/27/26):
+    # Disabled, as there is now a more optimized method.
 
-        gl.glViewport(0, 0, int(self.view.size.x), int(self.view.size.y))
-        editor.render_scene(self.fbo)
-        gl.glViewport(0, 0, *size)
+    # def draw(self, editor):
+    #     window = glfw.get_current_context()
+    #     size = glfw.get_window_size(window)
+
+    #     gl.glViewport(0, 0, int(self.view.size.x), int(self.view.size.y))
+    #     editor.render_scene(self.fbo)
+    #     gl.glViewport(0, 0, *size)
         
-        super().draw(editor)   
+    #     super().draw(editor)   
 
     def resize(self, new_width, new_height):
         super().resize(new_width, new_height)     
@@ -245,7 +245,11 @@ class Scenes(EditorUiWindow):
     name = "Scenes"
     def __init__(self):
         super().__init__()
-        self.resize(200, 150)
         self.scene_manager = get_modules.scene_manager()
         self.draw_data.padding = glm.vec2(10, 10)
-        ListView(self, self.renderable_width, self.renderable_height, self.scene_manager.scenes)
+        self.list_view = ListView(self, self.renderable_width, self.renderable_height, self.scene_manager.scenes)
+
+    def resize(self, new_width, new_height):
+        self.list_view.resize(glm.vec2(new_width, new_height - 30) - self.draw_data.padding * 2)
+
+        super().resize(new_width, new_height)
