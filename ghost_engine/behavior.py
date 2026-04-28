@@ -34,6 +34,35 @@ class InitMethod:
 
         return wrapper
 
+class AdvancedBehavior:
+    """
+    An interface, adding callbacks to a base behavior for the following events:
+    - `on_set_enabled`: Ran whenever the @enabled.setter method is called.
+    """
+    def __init_subclass__(cls):
+        if not issubclass(cls, Behavior):
+            Logger("ADVANCED BEHAVIOR").log_fatal("Cannot use AdvancedBehavior on a non-behavior object!")
+        
+        enabled = getattr(cls, "enabled")
+        if isinstance(enabled, property):
+            original_setter = enabled.fset
+            def new_enabled_setter(inst, val):
+                original_setter(inst, val)
+                inst.on_set_enabled()
+            
+            cls.enabled = property(
+                enabled.fget,
+                new_enabled_setter,
+                enabled.fdel,
+                enabled.__doc__
+            )
+        
+        else:
+            Logger("ADVANCED BEHAVIOR").log_error("Behavior.enabled attribute is not a property!")
+
+    def on_set_enabled(self):
+        pass
+
 class PhysicsBehavior:
     """
     An interface, adding methods for the following events:
@@ -125,7 +154,7 @@ class RenderBehavior:
 
 class Behavior:
     """
-    The basic class all scripts are required to inherit from. Implements events for:
+    The basic class all game scripts are required to inherit from. Implements events for:
     - `__init__`: Class initalization. 
     - `update`: Called every 'update', or 'tick', during the game's runtime.
     - `fixed_update`: Called ~50 times every second, typically used for physics.
