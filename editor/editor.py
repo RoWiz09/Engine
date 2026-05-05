@@ -1,22 +1,23 @@
 from __future__ import annotations
 from typing_extensions import overload
+from pathlib import Path
+import struct
+import random
+import hashlib
 
 from systems.argument_parser import ArgumentParser
-# from systems.editor_windows import *
 
-import glfw, time
+import glfw
 import os, OpenGL.GL as gl
-
-from pyglm import glm
 
 from systems.editor_camera import editor_camera
 
 from systems.window_drawer import WindowDrawer
 from systems.window_docker import *
 from systems.editor_windows import *
+from systems.console import ConsoleLogger
 
-
-from systems import get_modules as modules
+from systems import globals as modules
 
 import json
 import sys
@@ -28,6 +29,7 @@ def glfw_error_handler(e_code:str, desc:str):
 
 glfw.set_error_callback(glfw_error_handler)
 
+ConsoleLogger()
 class Window:
     _instance = None
     _created = False
@@ -43,7 +45,6 @@ class Window:
     def __init__(self, path: str, width:int, height:int): ...
     def __init__(self, path: str, width=800, height=600):
         os.chdir(path)
-
         if self._created:
             return
         
@@ -69,6 +70,8 @@ class Window:
         gl.glEnable(gl.GL_CULL_FACE)
         gl.glEnable(gl.GL_BLEND)
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+        
+        gl.glEnable(gl.GL_STENCIL_TEST)
 
         self.input_handler = Input()
 
@@ -77,18 +80,52 @@ class Window:
         compiled = not os.path.isfile(".rproj") # If there is a .rproj file, then the project has not been built yet.
         if compiled:
             self.logger.log_fatal("Unable to edit a compiled game!")
-            sys.exit()
 
-        else:
-            with open(".rproj") as project_file:
-                self.project_data = json.load(project_file)
-            os.environ["project"] = self.project_data["name"]
+        with open(".rproj") as project_file:
+            self.project_data = json.load(project_file)
+        os.environ["project"] = self.project_data["name"]
 
-            glfw.set_window_title(self.window, "GhostEngine Editor - " + self.project_data["name"])
+        glfw.set_window_title(self.window, "GhostEngine Editor - " + self.project_data["name"])
+
+        # RoWiz (5/4/26):
+        # Before creating the scene manager, we have to modify the pack class functions.
+        def pack_init(self: modules.Pack):
+            self.files_ = []
+
+            assets = Path("assets")
+            for dirpath, _, filenames in os.walk(assets):
+                dirpath = Path(dirpath)
+                if dirpath.parts[-1] == "__pycache__":
+                    continue
+
+                for file in filenames:
+                    self.files_.append(dirpath / file)                
+
+        get_decorator = getattr(modules.pack, "_Pack__get_decorator")
+        @get_decorator
+        def pack_get_contents(self: modules.Pack, path: modules.PathLike):
+            return path.read_text()
+        
+        @get_decorator
+        def pack_get_raw(self: modules.Pack, path: modules.PathLike):
+            return path.read_text().encode()
+        
+        @get_decorator
+        def pack_read_json(self: modules.Pack, path: modules.PathLike):
+            return json.loads(path.read_text())
+        
+        @property
+        def pack_files(self: modules.Pack):
+            return self.files_
+        
+        setattr(modules.pack, "__init__", pack_init)
+        setattr(modules.pack, "get_contents", pack_get_contents)
+        setattr(modules.pack, "get_raw", pack_get_raw)
+        setattr(modules.pack, "read_json", pack_read_json)
+        setattr(modules.pack, "files", pack_files)
 
         self.scene_framebuffer = gl.glGenFramebuffers(1)
         self.scene_manager = SceneManager()
-        self.scene_manager.load_scene_index(0, alert_scripts = False)
         Window._created = True
 
         self.drawer = WindowDrawer()
@@ -97,28 +134,34 @@ class Window:
         scene_viewer = SceneView()
         hierarchy = Hierarchy()
         inspector = Inspector()
-        scenes = Scenes()
+        console = ConsoleWindow()
+        files = FileViewer()
 
         self.drawer.add_window_data(scene_viewer)
         self.drawer.add_window_data(hierarchy)
         self.drawer.add_window_data(inspector)
-        self.drawer.add_window_data(scenes)
+        self.drawer.add_window_data(console)
+        self.drawer.add_window_data(files)
 
         root = self.docker.dock(self.docker.root, scene_viewer, "right")
-        # self.docker.dock(root.child_a, scenes, "top")
         self.docker.dock(root.child_a, hierarchy)
         self.docker.set_ratio(root.child_a, 0.15, self)
         self.docker.set_ratio(root, 0.15, self)
-        # self.docker.dock(root.child_a, hierarchy)
 
         self.docker.dock(root.child_b, inspector, "right")
         self.docker.set_ratio(root.child_b, 0.75, self)
-        self.docker.compute_layout(self)
 
+        node = self.docker.dock(root, console, "bottom")
+        self.docker.dock(node, files, "bottom")
+        self.docker.set_ratio(root, 0.75, self)
+
+        self.docker.compute_layout(self)
         self.editor_cam = editor_camera(self.input_handler)
         self.moving_camera = False
 
         self.running_game = False
+        self.scene_manager.load_scene_index(0, alert_scripts = False)
+        Hierarchy.rebuild_windows()
 
         self.last_time = glfw.get_time()
 
@@ -183,6 +226,83 @@ class Window:
     def terminate(self):
         glfw.terminate()
 
+    def build_game(self):
+        print("Building the game...")
+
+        # Build the executable using PyInstaller
+        try:
+            if os.system("py -m PyInstaller main.py") != 0:
+                print("Failed to build the executable.")
+        except Exception as e:
+            print(f"Error during build: {e}")
+
+        print("Writing asset packs...")
+
+        # Pack the game assets
+        self.write_packs()
+
+        print("Game built successfully!")
+
+    def write_packs(self):
+        """
+            Used when building a project made in the engine. \n
+            TODO: Add DLC Packing
+        """
+
+        assets_path = Path("assets")
+        output_path = Path("build")
+        output_path.mkdir(parents=True, exist_ok=True)
+        dlcs: list[tuple[str, dict]] = [("edlc", {"root": "GhostEngine"})]
+        with open(".rproj") as project_file:
+            project_data = json.load(project_file)
+            dlcs.extend(project_data["dlc"].items())
+        
+        file_positions = {}
+        for dlc_name, dlc_data in dlcs:
+            dlc_root: str = dlc_data["root"]
+            dlc_file_path = output_path / (dlc_name + ".rpk")
+            dlc_file = dlc_file_path.open("wb+")
+            dlc_file.write(struct.pack("<4sHH", b"RPK", 1, 2))
+            dlc_file.write(struct.pack("<4s", b"FS"))
+            file_bytes = b""
+            for dirpath, _, files in (assets_path / dlc_root).walk():
+                if str(dirpath).endswith("__pycache__"):
+                    continue
+
+                for file in files:
+                    file_path = (dirpath / file)
+                    with open(file_path) as f:
+                        content = f.read()
+
+                    file_positions[str(dlc_name / file_path.relative_to(assets_path/dlc_root))] = (len(file_bytes), len(content))
+                    file_bytes += struct.pack(f"<{len(content)}s", content.encode())
+                
+            dlc_file.write(struct.pack("<Q", len(file_bytes)) + file_bytes)
+            dlc_file.flush()
+            
+            dlc_file.seek(0)
+            hash_ = hashlib.sha256(dlc_file.read()).digest()
+            dlc_file.write(struct.pack("<4sQ", b"HA", 32) + hash_)
+            dlc_data["hash"] = hash_
+
+        master = output_path / "mdlc.mrpk"
+        master_file = master.open("wb+")
+
+        master_file.write(struct.pack("<4sHHI", b"MRPK", 1, 1, 2))
+        master_file.write(struct.pack("<4sI", b"DLCD", len(dlcs)))
+        for dlc_name, dlc_data in dlcs:
+            master_file.write(
+                struct.pack(
+                    f"<I{len(dlc_name)}sI{len(dlc_data["root"])}s", 
+                    len(dlc_name), dlc_name.encode(), 
+                    len(dlc_data["root"]), dlc_data["root"].encode()
+                ) + dlc_data["hash"])
+            
+        master_file.write(struct.pack("<4sI", b"MPFS", len(file_positions)))
+        for path, file_data in file_positions.items():
+            offset, size = file_data
+            master_file.write(struct.pack(f"<I{len(path)}sQQ", len(path), path.encode(), offset, size))
+
 arg_parser = ArgumentParser()
 arg_parser.add_argument("project-path")
 
@@ -198,6 +318,7 @@ def get_path(location: str):
 base_path = get_path(arg_parser.get_arg("project-path"))
 os.chdir(base_path)
 Logger, SceneManager, Input = modules.get_modules(base_path)
+modules.logger_module.configure_loggers(log_to_console = True, log_level = modules.logger_module.LoggingLevels.DEBUG)
 KeyCodes, MouseButtons = modules.key_codes, modules.mouse_buttons
 
 window = Window(base_path)
