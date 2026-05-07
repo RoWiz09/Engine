@@ -1,9 +1,20 @@
 from __future__ import annotations
 from .core.logger import Logger
 
+from typing import TYPE_CHECKING, Any, TypeAlias
+if TYPE_CHECKING:
+    from .object import Object as object
+else:
+    object: TypeAlias = Any
+
 def register_editor_button(func):
     Behavior.editor_button_registry.append(func)
     return func
+
+EXCLUDED_FROM_BUILD = set()
+def exclude_from_build(func):
+    global EXCLUDED_FROM_BUILD
+    EXCLUDED_FROM_BUILD.add(func)
 
 class InitMethod:
     """
@@ -63,6 +74,13 @@ class AdvancedBehavior:
     def on_set_enabled(self):
         pass
 
+    @exclude_from_build
+    def on_editor_reload(self):
+        """
+            A method called when the editor reloads scripts. This is not included in builds.
+        """
+        pass
+
 class PhysicsBehavior:
     """
     An interface, adding methods for the following events:
@@ -71,7 +89,7 @@ class PhysicsBehavior:
     """
 
     # Collisions
-    def on_collision_start(self, other):
+    def on_collision_start(self, other: object):
         """
         Called upon a collision 'starting', or the first collision between two gameobjects.
         
@@ -80,7 +98,7 @@ class PhysicsBehavior:
         """
         pass
 
-    def on_collision(self, other):
+    def on_collision(self, other: object):
         """
         Continuously called while there is a collision between two gameobjects.
         
@@ -89,7 +107,7 @@ class PhysicsBehavior:
         """
         pass
 
-    def on_collision_exit(self, other):
+    def on_collision_exit(self, other: object):
         """
         Called when there is no longer a collision between two gameobjects.
         
@@ -99,7 +117,7 @@ class PhysicsBehavior:
         pass
 
     # Triggers
-    def on_trigger_start(self, other):
+    def on_trigger_start(self, other: object):
         """
         Called upon a trigger 'starting', or the first trigger collision between two gameobjects.
         
@@ -108,7 +126,7 @@ class PhysicsBehavior:
         """
         pass
 
-    def on_trigger(self, other):
+    def on_trigger(self, other: object):
         """
         Continuously called while there is a trigger collision between two gameobjects.
         
@@ -117,7 +135,7 @@ class PhysicsBehavior:
         """
         pass
 
-    def on_trigger_exit(self, other):
+    def on_trigger_exit(self, other: object):
         """
         Called when there is no longer a trigger collision between two gameobjects.
         
@@ -177,7 +195,7 @@ class Behavior:
             Behavior.component_category_registry[cls.category] = []
         Behavior.component_category_registry[cls.category].append(cls)
         
-    def __init__(self, gameobject):
+    def __init__(self, gameobject: object):
         try:
             super().__init__(gameobject)
         except:

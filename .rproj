@@ -1,6 +1,8 @@
 {
     "name":"testproj",
     "dlc":{
-        "dlc0": "testproj"
+        "dlc0": {
+            "root": "testproj"
+        }
     }
 }

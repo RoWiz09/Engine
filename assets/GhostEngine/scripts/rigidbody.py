@@ -1,8 +1,8 @@
-from ghost_engine.behavior import Behavior, EditorField
+from ghost_engine.behavior import *
 
 from pyglm import glm
 
-class Rigidbody(Behavior):
+class Rigidbody(Behavior, PhysicsBehavior):
     velocity = glm.vec3(0)
 
     gravity = EditorField(float, -9.8)
@@ -36,18 +36,8 @@ class Rigidbody(Behavior):
                     self.velocity += glm.vec3(a) * direction
 
     def on_collision_start(self, other):
-        self.grounded = True
-
         if self.velocity.y < 0:
-            self.velocity.y = 0
-    
-    def on_collision_exit(self, other):
-        self.grounded = False
-
-        if self.velocity.y < 0:
+            self.grounded = True
             self.velocity.y = 0
 
-    def add_force_vector(self, force: glm.vec3):
-        self.velocity += force
-        if self.velocity.y > 0:
-            self.grounded = False
+        other

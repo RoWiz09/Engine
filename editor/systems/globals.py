@@ -1,6 +1,8 @@
 import importlib.util as import_util
 import os, sys
 
+import threading
+
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ghost_engine.core.logger import Logger
@@ -9,30 +11,39 @@ if TYPE_CHECKING:
     
     from ghost_engine.core.input import KeyCodes, MouseButtons
     from ghost_engine.behavior import EditorField
+    from ghost_engine.core import logger as LoggerModule
+    from ghost_engine.core.packer import Pack, PathLike 
+
     from ..editor import Window
 
-if TYPE_CHECKING:
+
+    logger_module: LoggerModule = None
     logger: type[Logger] = None
     scene_manager: type[SceneManager] = None
     input_handler: type[Input] = None
     key_codes: type[KeyCodes] = None
     mouse_buttons: type[MouseButtons] = None
     editor_field: type[EditorField] = None
+    pack: type[Pack] = None
 
     editor_window: Window = None
 
 else:
-    logger = None
-    scene_manager = None
-    input_handler = None
-    key_codes = None
-    mouse_buttons = None
-    editor_field = None
+    logger_module: type = None
+    logger: type = None
+    scene_manager: type = None
+    input_handler: type = None
+    key_codes: type = None
+    mouse_buttons: type = None
+    editor_field: type = None
+    pack: type = None
 
     editor_window = None
 
+GL_FUNC_LOCK = threading.Lock()
+
 def get_modules(base_path: str):
-    global logger, scene_manager, input_handler, key_codes, mouse_buttons, editor_field
+    global logger, logger_module, scene_manager, input_handler, key_codes, mouse_buttons, editor_field, pack
     if base_path not in sys.path:
         sys.path.insert(0, base_path)
 
@@ -54,12 +65,14 @@ def get_modules(base_path: str):
     # Import Logger
     init_module = load_engine_module("__init__", ["ghost_engine", "__init__.py"], "ghost_engine")
     logger = getattr(init_module, "Logger")
+    logger_module = sys.modules["ghost_engine.core.logger"]
     scene_manager = getattr(init_module, "SceneManager")
     input_handler = getattr(init_module, "Input") 
 
     key_codes = getattr(init_module, "KeyCodes") 
     mouse_buttons = getattr(init_module, "MouseButtons")
     editor_field = getattr(sys.modules["ghost_engine.behavior"], "EditorField")
+    pack = getattr(sys.modules["ghost_engine.core.packer"], "Pack")
     getattr(init_module, "setup")()
 
     return logger, scene_manager, input_handler

@@ -1,13 +1,17 @@
 from __future__ import annotations
 from typing import Optional, Literal, Any, TypeAlias
 
-from .editor_windows import EditorUiWindow, WindowDrawer
-from . import get_modules as modules
+from .editor_windows import *
+from . import globals as modules
 
 from pyglm import glm
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..editor import Window
+
+from .font import get_size
+
+import OpenGL.GL as gl
 
 Split: TypeAlias = Literal["horizontal", "vertical"]
 SplitDirection: TypeAlias = Literal["left", "right", "top", "bottom"]
@@ -28,7 +32,7 @@ class DockNode:
 
         # RoWiz (4/8/26):
         # Still need to implement tabs in the UI, but changed this to a list anyway.
-        self.windows: list[EditorUiWindow] = []
+        self.windows: dict[EditorUiWindow, Tab] = {}
         self.selected_window = None
 
         docker.nodes.append(self)
@@ -84,10 +88,37 @@ class DockNode:
         if self.selected_window is None:
             return False
         
-        window = self.windows[self.selected_window]
+        windows = list(self.windows.keys())
+
+        window = windows[self.selected_window]
         window.draw(editor)
 
-        mouse_pos = glm.vec2(*modules.input_handler().mouse_pos)
+        input_ = modules.input_handler()
+
+        mouse_pos = glm.vec2(*input_.mouse_pos)
+        pos = self.est_pos + glm.vec2(2, 2)
+        for window, button in self.windows.items():
+            if button == None:
+                size = get_size(window.name, TextStyle.NORMAL, 12)
+                tab = Tab(None, size.x + 20, 20, window.name)
+                self.windows[window] = tab
+
+                tab.set_selected(windows[self.selected_window] == window)
+                tab.draw(editor, pos)
+                pos.x += tab.size.x
+
+                if tab.rect.collide_point(mouse_pos) and input_.get_mouse_button_down(modules.mouse_buttons.LEFT):
+                    self.selected_window = windows.index(window)
+
+                continue
+            
+            button.set_selected(windows[self.selected_window] == window)
+            button.draw(editor, pos)
+            pos.x += button.size.x
+
+            if button.rect.collide_point(mouse_pos) and input_.get_mouse_button_down(modules.mouse_buttons.LEFT):
+                self.selected_window = windows.index(window)
+
         if window.rect.collide_point(mouse_pos):
             return True
         
@@ -201,8 +232,8 @@ class Docker:
         Args:
             editor (Window): The editor window class instance.
         """
-        self.root.est_size = glm.vec2(editor.size())
-        self.root.est_pos = glm.vec2(0, 0)
+        self.root.est_size = glm.vec2(editor.size()) - glm.vec2(0, 20)
+        self.root.est_pos = glm.vec2(0, 20)
 
         cur_nodes: list[DockNode] = []
         if self.root.is_split():
@@ -279,25 +310,23 @@ class Docker:
                         child_a.selected_window = node.selected_window
                     node.windows = []
 
-                print("wows", window.name)
                 if split in ("top", "left"):
-                    child_a.windows.append(window)
+                    child_a.windows[window] = None
                     child_a.selected_window = len(child_a.windows) - 1
 
                 else:
-                    child_b.windows.append(window)
+                    child_b.windows[window] = None
                     child_b.selected_window = len(child_b.windows) - 1
 
                 node.split_node(child_a, child_b, split_dir)
 
             elif split_dir == cur_split:
-                print("wow", window.name)
                 if split in ("top", "left"):
-                    node.child_a.windows.append(window)
+                    node.child_a.windows[window] = None
                     node.child_a.selected_window = len(node.child_a.windows) - 1
 
                 else:
-                    node.child_b.windows.append(window)
+                    node.child_b.windows[window] = None
                     node.child_b.selected_window = len(node.child_b.windows) - 1
 
             else:
@@ -305,13 +334,13 @@ class Docker:
                 child_b = DockNode(self)
 
                 if split in ("top", "left"):
-                    child_a.windows.append(window)
+                    child_a.windows[window] = None
                     child_a.selected_window = len(child_a.windows) - 1
 
                     child_b.set_data_from_node(node)
 
                 else:
-                    child_b.windows.append(window)
+                    child_b.windows[window] = None
                     child_b.selected_window = len(child_b.windows) - 1
 
                     child_a.set_data_from_node(node)
@@ -320,7 +349,7 @@ class Docker:
 
         else:
             # Just dock the window!
-            node.windows.append(window)
+            node.windows[window] = None
             node.selected_window = len(node.windows) - 1
 
         return node
@@ -343,10 +372,10 @@ class Docker:
             modules.logger("EDITOR").log_warning(f"Tried to undock {window.name} from a split node!")
             return
         
-        node.windows.remove(window)
+        node.windows.pop(window)
         
         # If the user removed the final window, handle accordingly
-        if node.windows == []:
+        if node.windows == {}:
             if parent := node.parent:
                 child_me = parent.get_child(node)
                 child_not_me = "child_b" if child_me == "child_a" else "child_a"
@@ -365,7 +394,8 @@ class Docker:
         Args:
             editor (Window): The editor window class instance.
         """
-        if self.root.est_size != glm.vec2(*editor.size()):
+        size = editor.size()
+        if self.root.est_size != glm.vec2(size[0], size[1]-20):
             self.compute_layout(editor)
 
     def draw(self, editor: Window):
@@ -373,6 +403,6 @@ class Docker:
         for node in self.nodes:
             focus_state = node.render(editor)
             if focus_state:
-                focused = node.windows[node.selected_window]
+                focused = list(node.windows.keys())[node.selected_window]
 
         return focused

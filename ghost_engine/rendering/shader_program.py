@@ -13,11 +13,6 @@ def is_iterable(obj):
     except TypeError:
         return False
 
-
-# ===============================
-# std140 UBO layouts
-# ===============================
-
 class PointLightUBO(ctypes.Structure):
     _fields_ = [
         ("position",    ctypes.c_float * 4),  # xyz + intensity
@@ -85,7 +80,6 @@ class ShaderProgram:
         
 
     def _setup_light_ubos(self, program):
-        # ---------- Point Lights ----------
         self.point_light_ubo = glGenBuffers(1)
         glBindBuffer(GL_UNIFORM_BUFFER, self.point_light_ubo)
         glBufferData(
@@ -102,7 +96,6 @@ class ShaderProgram:
         else:
             Logger("SHADER").log_warning("PointLightBlock not found in shader.")
 
-        # ---------- Spot Lights ----------
         self.spot_light_ubo = glGenBuffers(1)
         glBindBuffer(GL_UNIFORM_BUFFER, self.spot_light_ubo)
         glBufferData(

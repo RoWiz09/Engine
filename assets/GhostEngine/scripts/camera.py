@@ -1,10 +1,10 @@
-from ghost_engine.behavior import Behavior, EditorField
+from ghost_engine.behavior import Behavior, EditorField, AdvancedBehavior
 from ghost_engine.rendering.camera_type import CamType
 
 from pyglm import glm
 import glfw
 
-class Camera(Behavior, CamType):
+class Camera(Behavior, CamType, AdvancedBehavior):
     category = "Rendering"
 
     rotation_mod = EditorField(glm.vec3, glm.vec3())
@@ -16,7 +16,7 @@ class Camera(Behavior, CamType):
     
     def on_scene_load(self, scene_info):
         if not isinstance(self.rotation_mod, glm.quat):
-            self.rotation_mod = glm.quat(glm.radians(glm.vec3(self.rotation_mod)))
+            self.rotation_mod_ = glm.quat(glm.radians(glm.vec3(self.rotation_mod)))
 
         if not isinstance(self.position_mod, glm.vec3):
             self.position_mod = glm.vec3(self.position_mod)
@@ -24,13 +24,14 @@ class Camera(Behavior, CamType):
     def get_view_mat(self):
         return glm.lookAt(
             self.position_mod + self.gameobject.transform.pos, 
-            self.position_mod + self.gameobject.transform.pos + glm.vec3(0, 0, 1) * (self.rotation_mod * self.gameobject.transform.rot), 
-            glm.vec3(0, 1, 0) * (self.rotation_mod * self.gameobject.transform.rot)
+            self.position_mod + self.gameobject.transform.pos + glm.vec3(0, 0, 1) * (self.rotation_mod_ * self.gameobject.transform.rot), 
+            glm.vec3(0, 1, 0) * (self.rotation_mod_ * self.gameobject.transform.rot)
         )
         
     def get_projection_mat(self):
         width, height = glfw.get_window_size(glfw.get_current_context())
         return glm.perspective(glm.radians(60), width/height, 0.01, 1000)
-    
+
     def get_view_pos(self):
         return self.gameobject.transform.pos + self.position_mod
+    

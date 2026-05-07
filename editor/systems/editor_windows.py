@@ -3,13 +3,21 @@ from __future__ import annotations
 import OpenGL.GL as gl
 
 from .window_drawer import *
-from . import get_modules
+from .font import TextStyle
+from . import globals
+
+from .console import ConsoleLogger
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ghost_engine.object import Object
 
-import sys
+import sys, math
+import asyncio
+
+import colorama
+from enum import Enum
+from dataclasses import dataclass
 
 class SceneView(EditorUiWindow):
     name = "Scene"
@@ -18,22 +26,22 @@ class SceneView(EditorUiWindow):
         self.view = UiElement(self, 0, 0)
         self.view.resize_callback = self.view_resize_callback
 
-        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, get_modules.editor_window.scene_framebuffer)
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, globals.editor_window.scene_framebuffer)
         gl.glFramebufferTexture2D(gl.GL_READ_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0, gl.GL_TEXTURE_2D, self.view.texture, 0)
 
         self.rbo = gl.glGenRenderbuffers(1)
         gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, self.rbo)
-        gl.glRenderbufferStorage(gl.GL_RENDERBUFFER, gl.GL_DEPTH_COMPONENT24, int(self.view.size.x), int(self.view.size.y))
+        gl.glRenderbufferStorage(gl.GL_RENDERBUFFER, gl.GL_DEPTH_COMPONENT24, math.ceil(self.view.size.x), math.ceil(self.view.size.y))
         gl.glFramebufferRenderbuffer(gl.GL_FRAMEBUFFER, gl.GL_DEPTH_ATTACHMENT, gl.GL_RENDERBUFFER, self.rbo)
         gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, 0)
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
 
     def view_resize_callback(self, view: UiElement):
-        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, get_modules.editor_window.scene_framebuffer)
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, globals.editor_window.scene_framebuffer)
         gl.glFramebufferTexture2D(gl.GL_READ_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0, gl.GL_TEXTURE_2D, self.view.texture, 0)
 
         gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, self.rbo)
-        gl.glRenderbufferStorage(gl.GL_RENDERBUFFER, gl.GL_DEPTH_COMPONENT24, int(self.view.size.x), int(self.view.size.y))
+        gl.glRenderbufferStorage(gl.GL_RENDERBUFFER, gl.GL_DEPTH_COMPONENT24, math.ceil(self.view.size.x), math.ceil(self.view.size.y))
         gl.glFramebufferRenderbuffer(gl.GL_FRAMEBUFFER, gl.GL_DEPTH_ATTACHMENT, gl.GL_RENDERBUFFER, self.rbo)
         gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, 0)
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
@@ -42,7 +50,7 @@ class SceneView(EditorUiWindow):
         window = glfw.get_current_context()
         size = glfw.get_window_size(window)
 
-        gl.glViewport(0, 0, int(self.view.size.x), int(self.view.size.y))
+        gl.glViewport(0, 0, math.ceil(self.view.size.x), math.ceil(self.view.size.y))
         editor.render_scene()
         gl.glViewport(0, 0, *size)
         
@@ -57,7 +65,6 @@ class SceneView(EditorUiWindow):
         gl.glBindTexture(gl.GL_TEXTURE_2D, self.name_texture)
         gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA, *self.text_img_size, 0, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, text_img.tobytes())
         gl.glBindTexture(gl.GL_TEXTURE_2D, 0)
-
         return self
     
 class Inspector(EditorUiWindow):
@@ -79,10 +86,11 @@ class Inspector(EditorUiWindow):
             width_ratio = ui_obj.size.x / old_renderable_width
 
             ui_obj.resize(glm.vec2(width_ratio * new_renderable_width, ui_obj.size.y))
-
-        return super().resize(new_width, new_height)
+        
+        super().resize(new_width, new_height)
+        self.update_max_scroll()
     
-    def build_for_object(self, data):
+    async def build_for_object(self, data):
         if TYPE_CHECKING:
             assert isinstance(self.object_type, type[Object])
             assert isinstance(data, Object)
@@ -116,12 +124,12 @@ class Inspector(EditorUiWindow):
                 return
             
             if parentField.get_value().object_data in get_children(data):
-                get_modules.logger("INSPECTOR").log_error("Cannot set the parent of an object to one of it's children!")
+                globals.logger("INSPECTOR").log_error("Cannot set the parent of an object to one of it's children!")
                 parentField.data = None
                 return
             
             elif parentField.get_value().object_data == data:
-                get_modules.logger("INSPECTOR").log_error("Cannot parent an object to itself!")
+                globals.logger("INSPECTOR").log_error("Cannot parent an object to itself!")
                 parentField.data = None
                 return
             data.transform.parent = parentField.get_value().object_data.transform
@@ -136,7 +144,7 @@ class Inspector(EditorUiWindow):
             TextElement(self, comp_class.__name__, self.renderable_width, 30)
 
             for var_name, var_data in vars(comp_class).items():
-                if isinstance(var_data, get_modules.editor_field):
+                if isinstance(var_data, globals.editor_field):
                     var = getattr(component, var_name)
                     if var_data.type == glm.vec3:
                         build_vec3_input(self, var)
@@ -150,13 +158,16 @@ class Inspector(EditorUiWindow):
                     elif var_data.type == bool:
                         Checkbox(self, var)
 
-    def build(self, data):
+    async def build(self, data):
+        self.scroll = 0.0
         if self.locked:
             return
         
         self.ui_elements.clear()        
         if isinstance(data, self.object_type):
-            self.build_for_object(data)
+            await self.build_for_object(data)
+        
+        self.update_max_scroll()
     
     @classmethod
     def set_data(cls, data):
@@ -166,7 +177,7 @@ class Inspector(EditorUiWindow):
         for inst in cls.instances:
             inst: Inspector
 
-            inst.build(data)
+            asyncio.run(inst.build(data))
 
 class Hierarchy(EditorUiWindow):
     name = "Hierarchy"
@@ -177,7 +188,7 @@ class Hierarchy(EditorUiWindow):
         self.draw_data.padding.x = 5
         self.draw_data.padding.y = 5
 
-        self.manager = get_modules.scene_manager()
+        self.manager = globals.scene_manager()
         self.object_buttons: set[Button] = set()
 
         self.object_type = None
@@ -185,7 +196,7 @@ class Hierarchy(EditorUiWindow):
 
         Hierarchy.instances.add(self)
 
-        self.build()
+        asyncio.run(self.build())
 
         self.old = False
 
@@ -207,7 +218,7 @@ class Hierarchy(EditorUiWindow):
 
         super().resize(new_width, new_height)
 
-    def build(self):
+    async def build(self):
         self.object_buttons.clear()
         self.ui_elements.clear()
 
@@ -224,16 +235,18 @@ class Hierarchy(EditorUiWindow):
                 build_layer(obj.children, max(20, width-20))
                 self.object_buttons.add(button)
 
+            return True
+
         build_layer(root_objects, self.draw_data.size.x - self.draw_data.padding.x * 2)
     
     @classmethod
     def rebuild_windows(cls):
         for inst in cls.instances:
-            inst.build()
+            asyncio.run(inst.build())
 
     def draw(self, editor):
         if self.old:
-            self.build()
+            asyncio.run(self.build())
             self.old = False
             
         super().draw(editor)
@@ -242,7 +255,7 @@ class Scenes(EditorUiWindow):
     name = "Scenes"
     def __init__(self):
         super().__init__()
-        self.scene_manager = get_modules.scene_manager()
+        self.scene_manager = globals.scene_manager()
         self.draw_data.padding = glm.vec2(10, 10)
         self.list_view = ListView(self, self.renderable_width, self.renderable_height, self.scene_manager.scenes)
         self.list_view.select_item_callback = self.select_scene_callback
@@ -280,3 +293,101 @@ class Scenes(EditorUiWindow):
         self.horiz_group.resize(glm.vec2(new_width, 50) - self.draw_data.padding * 2)
 
         super().resize(new_width, new_height)
+
+@dataclass
+class LogColor:
+    format_str: str
+    dim_col: str
+    norm_col: str
+    bright_col: str
+
+class LogColors(Enum):
+    RED = LogColor(colorama.Fore.RED, "#c61111", "#ff0000", "#fb4242")
+    WHITE = LogColor(colorama.Fore.WHITE, "#888888", "#afafaf", "#ffffff")
+    YELLOW = LogColor(colorama.Fore.YELLOW, "#EECC46", "#FFD738", "#FFCC00")
+
+@dataclass(frozen=True)
+class LogStr:
+    color: tuple[int, int, int]
+    text: str
+    style: TextStyle
+
+class ConsoleWindow(EditorUiWindow):
+    name = "Console"
+    console = ConsoleLogger()
+    def __init__(self):
+        super().__init__()
+        self.console.write_callback = self.update
+
+        self.set_scroll_on_add = True
+
+        self.draw_data.padding.x = 10
+        self.draw_data.padding.y = 10
+
+    @staticmethod
+    def hex_to_decimal_list(hex_: str):
+        return [int(hex_[i:i+2], 16) for i in range(0, len(hex_), 2)]
+
+    @staticmethod
+    def format_str(data: str):
+        color = "#ffffff"
+        style = TextStyle.NORMAL
+        for col in list(LogColors):
+            name, col_data = col.name, col.value
+
+            if data.startswith(col_data.format_str):
+                data = data.replace(col_data.format_str, "")
+                if data.startswith(colorama.Style.DIM):
+                    color = col_data.dim_col
+                    data = data.replace(colorama.Style.DIM, "")
+                    break
+
+                if data.startswith(colorama.Style.NORMAL):
+                    color = col_data.norm_col
+                    data = data.replace(colorama.Style.NORMAL, "")
+                    break
+
+                if data.startswith(colorama.Style.BRIGHT):
+                    color = col_data.bright_col
+                    data = data.replace(colorama.Style.BRIGHT, "")
+                    break
+        
+        if data.startswith("\x1b[3m"):
+            style = TextStyle.ITALICS
+            data = data.replace("\x1b[3m", "")
+
+        data = data.removesuffix(colorama.Style.RESET_ALL + colorama.Fore.RESET)
+        return LogStr(__class__.hex_to_decimal_list(color[1:]), data, style)
+
+    def add_data(self, data: str):
+        log_str = self.format_str(data)
+        elem = TextElement(None, log_str.text, self.renderable_width, 12, build_texture=False)
+        elem.style = log_str.style
+        elem.color = tuple(log_str.color)
+
+        elem.set_text_size(12)
+        elem.set_anchor("lt", TextRenderAnchor.top_left)
+        elem.parent = self
+
+        with self.list_lock:
+            self.ui_elements.reverse()
+            self.ui_elements.insert(0, elem)
+            self.ui_elements = self.ui_elements[:self.console.max_length]
+            self.ui_elements.reverse()
+
+    def resize(self, new_width, new_height):
+        super().resize(new_width, new_height)
+
+        with self.list_lock:
+            for elem in self.ui_elements:
+                elem.resize(glm.vec2(new_width, 12))
+    
+    @classmethod
+    def update(cls, data: str):
+        for inst in cls.instances:
+            inst.add_data(data)
+
+class FileViewer(EditorUiWindow):
+    name = "Files"
+    def __init__(self):
+        super().__init__()

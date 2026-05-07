@@ -56,15 +56,6 @@ class Window:
         gl.glEnable(gl.GL_DEPTH_TEST)
 
         self.input_handler = Input()
-
-        compiled = not os.path.isfile(".rproj") # If there is a .rproj file, then the project has not been built yet.
-        if compiled:
-            os.environ['compiled'] = ""
-        else:
-            with open(".rproj") as project_file:
-                name = project_file.readline().split("=")[1]
-                name = name[:-2]
-            os.environ["project"] = name
         self.scene_manager = SceneManager()
         self.scene_manager.load_scene_index(0)
 
@@ -85,4 +76,10 @@ class Window:
         self.scene_manager.update_scene()
 
         glfw.swap_buffers(self.window)
+
+    def size(self):
+        return glfw.get_window_size(self.window)
+    
+    def terminate(self):
+        glfw.terminate()
     

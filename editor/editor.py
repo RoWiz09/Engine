@@ -1,9 +1,6 @@
 from __future__ import annotations
 from typing_extensions import overload
 from pathlib import Path
-import struct
-import random
-import hashlib
 
 from systems.argument_parser import ArgumentParser
 
@@ -15,12 +12,10 @@ from systems.editor_camera import editor_camera
 from systems.window_drawer import WindowDrawer
 from systems.window_docker import *
 from systems.editor_windows import *
-from systems.console import ConsoleLogger
 
 from systems import globals as modules
 
 import json
-import sys
 
 glfw_initalized = False
 
@@ -29,7 +24,6 @@ def glfw_error_handler(e_code:str, desc:str):
 
 glfw.set_error_callback(glfw_error_handler)
 
-ConsoleLogger()
 class Window:
     _instance = None
     _created = False
@@ -89,40 +83,9 @@ class Window:
 
         # RoWiz (5/4/26):
         # Before creating the scene manager, we have to modify the pack class functions.
-        def pack_init(self: modules.Pack):
-            self.files_ = []
-
-            assets = Path("assets")
-            for dirpath, _, filenames in os.walk(assets):
-                dirpath = Path(dirpath)
-                if dirpath.parts[-1] == "__pycache__":
-                    continue
-
-                for file in filenames:
-                    self.files_.append(dirpath / file)                
-
-        get_decorator = getattr(modules.pack, "_Pack__get_decorator")
-        @get_decorator
-        def pack_get_contents(self: modules.Pack, path: modules.PathLike):
-            return path.read_text()
-        
-        @get_decorator
-        def pack_get_raw(self: modules.Pack, path: modules.PathLike):
-            return path.read_text().encode()
-        
-        @get_decorator
-        def pack_read_json(self: modules.Pack, path: modules.PathLike):
-            return json.loads(path.read_text())
-        
-        @property
-        def pack_files(self: modules.Pack):
-            return self.files_
-        
-        setattr(modules.pack, "__init__", pack_init)
-        setattr(modules.pack, "get_contents", pack_get_contents)
-        setattr(modules.pack, "get_raw", pack_get_raw)
-        setattr(modules.pack, "read_json", pack_read_json)
-        setattr(modules.pack, "files", pack_files)
+        # Update - As of 5/7/26, I also add methods to the scene manager for asynchronous scene loading.
+        self.setup_pack()
+        self.setup_async_loading()
 
         self.scene_framebuffer = gl.glGenFramebuffers(1)
         self.scene_manager = SceneManager()
@@ -160,13 +123,66 @@ class Window:
         self.moving_camera = False
 
         self.running_game = False
-        self.scene_manager.load_scene_index(0, alert_scripts = False)
+        self.scene_manager.load_scene_index_async(0, alert_scripts = False)
         Hierarchy.rebuild_windows()
 
         self.last_time = glfw.get_time()
 
     def should_close(self):
         return glfw.window_should_close(self.window)
+    
+    def setup_pack(self):
+        def pack_init(self: modules.Pack):
+            self.files_ = []
+
+            assets = Path("assets")
+            for dirpath, _, filenames in os.walk(assets):
+                dirpath = Path(dirpath)
+                if dirpath.parts[-1] == "__pycache__":
+                    continue
+
+                for file in filenames:
+                    self.files_.append(dirpath / file)                
+
+        get_decorator = getattr(modules.pack, "_Pack__get_decorator")
+        @get_decorator
+        def pack_get_contents(self: modules.Pack, path: modules.PathLike):
+            return path.read_text()
+        
+        @get_decorator
+        def pack_get_raw(self: modules.Pack, path: modules.PathLike):
+            return path.read_text().encode()
+        
+        @get_decorator
+        def pack_read_json(self: modules.Pack, path: modules.PathLike):
+            return json.loads(path.read_text())
+        
+        @property
+        def pack_files(self: modules.Pack):
+            return self.files_
+        
+        setattr(modules.pack, "__init__", pack_init)
+        setattr(modules.pack, "get_contents", pack_get_contents)
+        setattr(modules.pack, "get_raw", pack_get_raw)
+        setattr(modules.pack, "read_json", pack_read_json)
+        setattr(modules.pack, "files", pack_files)
+
+    def setup_async_loading(self):
+        def load_scene_index_async(self: modules.SceneManager, scene_index: int, alert_scripts: bool = True):
+            Logger("SCENE MANAGEMENT").log_debug(f"Loading scene {scene_index} asynchronously")
+            async def load(scene_index, alert_scripts):
+                self.load_scene_index(scene_index, alert_scripts)
+
+            asyncio.run(load(scene_index, alert_scripts))
+
+        def load_scene_async(self: modules.SceneManager, scene_name: str, alert_scripts: bool = True):
+            async def load(scene_name, alert_scripts):
+                self.load_scene(scene_name, alert_scripts)
+
+            asyncio.run(load(scene_name, alert_scripts))
+
+        setattr(modules.scene_manager, "load_scene_index_async", load_scene_index_async)
+        setattr(modules.scene_manager, "load_scene_async", load_scene_async)
 
     def render_scene(self, frame_buffer = None):
         frame_buffer = frame_buffer if frame_buffer else self.scene_framebuffer
@@ -190,8 +206,6 @@ class Window:
         cur_time = glfw.get_time()
         dt = cur_time - self.last_time
         self.last_time = cur_time
-
-        # print(1/dt)
 
         glfw.poll_events()
         self.input_handler.get_inputs(self.window)
@@ -225,83 +239,6 @@ class Window:
 
     def terminate(self):
         glfw.terminate()
-
-    def build_game(self):
-        print("Building the game...")
-
-        # Build the executable using PyInstaller
-        try:
-            if os.system("py -m PyInstaller main.py") != 0:
-                print("Failed to build the executable.")
-        except Exception as e:
-            print(f"Error during build: {e}")
-
-        print("Writing asset packs...")
-
-        # Pack the game assets
-        self.write_packs()
-
-        print("Game built successfully!")
-
-    def write_packs(self):
-        """
-            Used when building a project made in the engine. \n
-            TODO: Add DLC Packing
-        """
-
-        assets_path = Path("assets")
-        output_path = Path("build")
-        output_path.mkdir(parents=True, exist_ok=True)
-        dlcs: list[tuple[str, dict]] = [("edlc", {"root": "GhostEngine"})]
-        with open(".rproj") as project_file:
-            project_data = json.load(project_file)
-            dlcs.extend(project_data["dlc"].items())
-        
-        file_positions = {}
-        for dlc_name, dlc_data in dlcs:
-            dlc_root: str = dlc_data["root"]
-            dlc_file_path = output_path / (dlc_name + ".rpk")
-            dlc_file = dlc_file_path.open("wb+")
-            dlc_file.write(struct.pack("<4sHH", b"RPK", 1, 2))
-            dlc_file.write(struct.pack("<4s", b"FS"))
-            file_bytes = b""
-            for dirpath, _, files in (assets_path / dlc_root).walk():
-                if str(dirpath).endswith("__pycache__"):
-                    continue
-
-                for file in files:
-                    file_path = (dirpath / file)
-                    with open(file_path) as f:
-                        content = f.read()
-
-                    file_positions[str(dlc_name / file_path.relative_to(assets_path/dlc_root))] = (len(file_bytes), len(content))
-                    file_bytes += struct.pack(f"<{len(content)}s", content.encode())
-                
-            dlc_file.write(struct.pack("<Q", len(file_bytes)) + file_bytes)
-            dlc_file.flush()
-            
-            dlc_file.seek(0)
-            hash_ = hashlib.sha256(dlc_file.read()).digest()
-            dlc_file.write(struct.pack("<4sQ", b"HA", 32) + hash_)
-            dlc_data["hash"] = hash_
-
-        master = output_path / "mdlc.mrpk"
-        master_file = master.open("wb+")
-
-        master_file.write(struct.pack("<4sHHI", b"MRPK", 1, 1, 2))
-        master_file.write(struct.pack("<4sI", b"DLCD", len(dlcs)))
-        for dlc_name, dlc_data in dlcs:
-            master_file.write(
-                struct.pack(
-                    f"<I{len(dlc_name)}sI{len(dlc_data["root"])}s", 
-                    len(dlc_name), dlc_name.encode(), 
-                    len(dlc_data["root"]), dlc_data["root"].encode()
-                ) + dlc_data["hash"])
-            
-        master_file.write(struct.pack("<4sI", b"MPFS", len(file_positions)))
-        for path, file_data in file_positions.items():
-            offset, size = file_data
-            master_file.write(struct.pack(f"<I{len(path)}sQQ", len(path), path.encode(), offset, size))
 
 arg_parser = ArgumentParser()
 arg_parser.add_argument("project-path")

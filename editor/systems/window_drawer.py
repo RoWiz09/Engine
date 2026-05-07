@@ -8,7 +8,7 @@ import glfw
 from pyglm import glm
 
 from .shader_program import ShaderProgram
-from . import get_modules as modules
+from . import globals as modules
 from enum import Enum
 
 from .font import render_window_label, render_text, TextStyle, AnchorPoints
@@ -43,6 +43,13 @@ class WindowDrawer:
             __class__.INST = super().__new__(cls)
 
         return __class__.INST
+    
+    def __init_subclass__(cls):
+        cls.setup()
+
+    @classmethod
+    def setup(cls):
+        pass
 
     def __init__(self):
         if WindowDrawer.INITALIZED:
@@ -57,6 +64,8 @@ class WindowDrawer:
         from .window_docker import Docker
         self.docker = Docker
 
+        self.top_bar = MenuBar(None)
+
         __class__.INITALIZED = True
 
     def render(self, editor: Window):
@@ -67,11 +76,22 @@ class WindowDrawer:
         WINDOW_SHADER.set_mat4("uProjection", ortho)
 
         focused = self.docker.INST.draw(editor)
-        if not self.focused_window:
-            self.focused_window = focused
+        if focused and self.focused_window != focused:                
+            if self.focused_window and not self.focused_window.focused_elem:
+                self.focused_window.lose_focus()
+                self.focused_window = focused
+                self.focused_window.focus()
 
-        elif self.focused_window and not self.focused_window.focused_elem:
-            self.focused_window = focused
+            else:
+                if self.focused_window:
+                    self.focused_window.lose_focus()
+                self.focused_window = focused
+                self.focused_window.focus()
+
+        if self.top_bar.size.x != editor.size()[0]:
+            self.top_bar.resize(glm.vec2(editor.size()[0], 20))
+
+        self.top_bar.draw(editor, glm.vec2(0, 0))
 
         for window in self.floating_windows:
             window.draw(editor)
@@ -80,11 +100,18 @@ class WindowDrawer:
                 continue
 
             if window.rect.collide_point(glm.vec2(*editor.input_handler.mouse_pos)):
+                if self.focused_window:
+                    self.focused_window.lose_focus()
                 self.focused_window = window
+                self.focused_window.focus()
 
     def handle_input(self, key_codes: type[KeyCodes], mouse_buttons: type[MouseButtons], input_handler: Input):
         if self.focused_window:
             self.focused_window.handle_input(key_codes, mouse_buttons, input_handler)
+
+            if not self.focused_window.rect.collide_point(glm.vec2(input_handler.mouse_pos)):
+                self.focused_window.lose_focus()
+                self.focused_window = None
 
     def add_window_data(self, window_data: EditorUiWindow):
         self.windows.add(window_data)
@@ -92,10 +119,11 @@ class WindowDrawer:
             self.floating_windows.add(window_data)
 
 WINDOW_SHADER = None
+STENCIL_TEXTURE = None
 VBO, VAO, EBO = None, None, None
 
 def setup():
-    global WINDOW_SHADER, VBO, VAO, EBO, BASE_WINDOW_TEXTURE
+    global WINDOW_SHADER, VBO, VAO, EBO, STENCIL_TEXTURE
     WINDOW_SHADER = ShaderProgram(
         """
             #version 330 core
@@ -122,10 +150,17 @@ def setup():
             out vec4 FragColor;
 
             void main() {
-                vec4 albedo  = texture(uTexture, vTexCoord).rgba;
+                vec4 albedo = texture(uTexture, vTexCoord).rgba;
                 FragColor = albedo;
             }
     """)
+
+    STENCIL_TEXTURE = gl.glGenTextures(1)
+    image = Image.new("RGBA", (1, 1), (37, 37, 38, 255))
+    gl.glBindTexture(gl.GL_TEXTURE_2D, STENCIL_TEXTURE)
+    gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA, *image.size, 0, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, image.tobytes())
+    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST)
+    gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST)
 
     verts = np.array([
         # Pos, UV
@@ -139,7 +174,6 @@ def setup():
         0, 1, 2,
         0, 2, 3
     ], dtype=np.uint32)
-
 
     vao = gl.glGenVertexArrays(1)
     vbo = gl.glGenBuffers(1)
@@ -169,10 +203,14 @@ def build_window_img(window: EditorUiWindow):
     width, height = window.get_draw_data().size
     edge = (60, 60, 60, 255)
     center = (37, 37, 38, 255)
+    top_bar = (47, 47, 48, 255)
+    inset = (32, 32, 33, 255)
 
     img = Image.new("RGBA", (int(width), int(height)))
     img_drawer = ImageDraw.Draw(img, "RGBA")
     img_drawer.rectangle((0, 0, width, height), outline=edge, fill=center, width=2)
+    img_drawer.rectangle((2, height - 24, width-2, height), fill=top_bar, width=2)
+    img_drawer.line((2, height - 24, width-2, height - 24), fill=inset, width=2)
     del img_drawer
 
     return img
@@ -189,6 +227,8 @@ class TextRenderAnchor(Enum):
     bottom_left = glm.vec2(0, 1)
     bottom_middle = glm.vec2(0.5, 1)
     bottom_right = glm.vec2(1, 1)
+
+BASE_OFFSET = 22
 
 class EditorUiWindow:
     name: str
@@ -221,9 +261,34 @@ class EditorUiWindow:
         self.focused_elem: UiElement = None
         self.__class__.instances.add(self)
 
+        self.scroll = 0.0
+        self.max_scroll = 0.0
+        self.scroll_sensitivity = 5.0
+
+        self.regen_stencil()
+
+        self.list_lock = modules.threading.Lock()
+
     def get_draw_data(self):
         return self.draw_data
     
+    def update_max_scroll(self):
+        self.max_scroll = 0
+        for elem in self.ui_elements:
+            self.max_scroll += elem.get_height() + self.draw_data.padding.y
+
+        self.max_scroll = max(0, self.max_scroll - (self.stencil_size.y))
+        self.scroll = max(0, min(self.scroll, self.max_scroll))
+    
+    @final
+    def regen_stencil(self):
+        self.stencil_model = glm.mat4(1)
+        self.stencil_topleft = glm.vec2(self.rect.left + self.draw_data.padding.x, self.rect.top + self.draw_data.padding.y + BASE_OFFSET)
+        self.stencil_size = glm.vec2(self.rect.right - self.draw_data.padding.x, self.rect.bottom - self.draw_data.padding.y) - self.stencil_topleft
+
+        self.stencil_model = glm.translate(self.stencil_model, glm.vec3(*self.stencil_topleft, 0))
+        self.stencil_model = glm.scale(self.stencil_model, glm.vec3(*self.stencil_size, 0))
+
     def move(self, new_x: float, new_y: float):
         """
             Moves the window to `new_x`, `new_y`. 
@@ -231,6 +296,8 @@ class EditorUiWindow:
         """
         self.draw_data.pos = glm.vec2(new_x, new_y)
         self.rect.move_to(self.draw_data.pos)
+
+        self.regen_stencil()
         return self
 
     def resize(self, new_width: float, new_height: float):
@@ -239,16 +306,20 @@ class EditorUiWindow:
             Returns this class for easier method chaining.
         """
         self.draw_data.size = glm.vec2(new_width, new_height)
+        self.rect.resize(self.draw_data.size)
 
         bg_img = build_window_img(self)
         gl.glBindTexture(gl.GL_TEXTURE_2D, self.bg_tex)
         gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA, *bg_img.size, 0, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, bg_img.tobytes())
 
-        self.rect.resize(self.draw_data.size)
-        for child in self.ui_elements:
-            child
-
+        self.regen_stencil()
         return self
+    
+    def focus(self):
+        modules.input_handler().scroll_callback = self.handle_scroll
+
+    def lose_focus(self):
+        modules.input_handler().scroll_callback = None
 
     def draw(self, editor: Window):
         global VAO
@@ -259,8 +330,8 @@ class EditorUiWindow:
         WINDOW_SHADER.use()
 
         # Base Window stuff
-        WINDOW_SHADER.set_mat4("uModel", self.draw_data.get_configuration_out())
-
+        win_model = self.draw_data.get_configuration_out()
+        WINDOW_SHADER.set_mat4("uModel", win_model)
         gl.glBindTexture(gl.GL_TEXTURE_2D, self.bg_tex)
 
         gl.glBindVertexArray(VAO)
@@ -269,27 +340,56 @@ class EditorUiWindow:
 
         gl.glBindTexture(gl.GL_TEXTURE_2D, 0)
     
-        # Window Title Bar
-        model = glm.mat4(1)
-        model = glm.translate(model, glm.vec3(*(self.draw_data.pos + glm.vec2(3, 0)), 0))
-        model = glm.scale(model, glm.vec3(*self.text_img_size, 0))
-        WINDOW_SHADER.set_mat4("uModel", model)
+        # RoWiz (4/29/26):
+        # Made it only draw the window title when not docked.
+        if not hasattr(self, "docked"):
+            model = glm.mat4(1)
+            model = glm.translate(model, glm.vec3(*(self.draw_data.pos + glm.vec2(3, 0)), 0))
+            model = glm.scale(model, glm.vec3(*self.text_img_size, 0))
+            WINDOW_SHADER.set_mat4("uModel", model)
 
-        gl.glBindTexture(gl.GL_TEXTURE_2D, self.name_texture)
+            gl.glBindTexture(gl.GL_TEXTURE_2D, self.name_texture)
 
+            gl.glBindVertexArray(VAO)
+            gl.glDrawElements(gl.GL_TRIANGLES, 6, gl.GL_UNSIGNED_INT, None)
+            gl.glBindVertexArray(0)
+
+            gl.glBindTexture(gl.GL_TEXTURE_2D, 0)
+
+        # Create a stencil before element rendering
+        WINDOW_SHADER.set_mat4("uModel", self.stencil_model)
+        gl.glEnable(gl.GL_STENCIL_TEST)
+        gl.glStencilOp(gl.GL_KEEP, gl.GL_KEEP, gl.GL_REPLACE)
+        gl.glStencilFunc(gl.GL_ALWAYS, 1, 0xFF)
+
+        gl.glBindTexture(gl.GL_TEXTURE_2D, STENCIL_TEXTURE)
         gl.glBindVertexArray(VAO)
         gl.glDrawElements(gl.GL_TRIANGLES, 6, gl.GL_UNSIGNED_INT, None)
         gl.glBindVertexArray(0)
 
-        gl.glBindTexture(gl.GL_TEXTURE_2D, 0)
+        gl.glStencilFunc(gl.GL_EQUAL, 1, 0xFF)
+        gl.glStencilOp(gl.GL_KEEP, gl.GL_KEEP, gl.GL_KEEP)
 
         # Child Elements
         pos = self.draw_data.pos + self.draw_data.padding
-        pos.y += 30 
-        for child in self.ui_elements:
-            if child.shown:
-                child.draw(editor, pos)
-                pos.y += child.get_height() + self.draw_data.padding.y
+        pos.y += BASE_OFFSET - self.scroll
+
+        def get_element_in_window(elem: UiElement):
+            stencil_bottomright = self.stencil_topleft + self.stencil_size
+            if pos.y > stencil_bottomright.y or pos.x > stencil_bottomright.x: return False
+            if pos.y + elem.get_height() < self.stencil_topleft.y or pos.x + child.size.x < self.stencil_topleft.x: return False
+            else: return True
+
+        with self.list_lock:
+            for child in self.ui_elements:
+                if child.shown:
+                    child.draw(editor, pos)
+                    pos.y += child.get_height() + self.draw_data.padding.y
+        
+        gl.glClearStencil(0)
+        gl.glClear(gl.GL_STENCIL_BUFFER_BIT)
+
+        gl.glDisable(gl.GL_STENCIL_TEST)
 
     def handle_input(self, key_codes: type[KeyCodes], mouse_buttons: type[MouseButtons], input_handler: Input):
         global HELD_DRAG_DATA
@@ -337,13 +437,16 @@ class EditorUiWindow:
     
     @property
     def renderable_height(self):
-        return self.draw_data.size.y - self.draw_data.padding.y * 2 - 30 
-
+        return self.draw_data.size.y - self.draw_data.padding.y * 2 - 30
+    
+    def handle_scroll(self, x_off, y_off):
+        self.scroll = max(0.0, min(self.scroll - y_off * self.scroll_sensitivity, self.max_scroll))
+        
 class UiElement:
     can_claim_focus: bool = False
     hold_focus: bool = False
 
-    def __init__(self, parent: EditorUiWindow, width: float, height: float):
+    def __init__(self, parent: EditorUiWindow, width: float, height: float, **kwrds):
         self.size = glm.vec2(width, height)
         self.pos_offset = glm.vec2(0, 0)
 
@@ -355,12 +458,19 @@ class UiElement:
             self.parent = parent
             self.parent.ui_elements.append(self)
 
-        self.texture = gl.glGenTextures(1)
 
         self.sprite = self.build_sprite()
-        self.rebuild_texture()
-        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR)
-        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
+        if kwrds.pop("build_texture", True):
+            self.texture = gl.glGenTextures(1)
+            gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture)
+            gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR)
+            gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
+
+            self.rebuild_texture()
+            self.texture_old = False
+        else:
+            self.texture = None
+            self.texture_old = True
 
         self.resize_callback = None
 
@@ -381,7 +491,7 @@ class UiElement:
 
     def resize_to_fill_window(self):
         self.size = glm.vec2(self.parent.draw_data.size.x - self.parent.draw_data.padding.x * 2, 
-                             self.parent.draw_data.size.y - self.parent.draw_data.padding.y * 2 - 30)
+                             self.parent.draw_data.size.y - self.parent.draw_data.padding.y * 2 - BASE_OFFSET)
         
         self.rect.resize(self.size)
         
@@ -403,6 +513,13 @@ class UiElement:
 
     def draw(self, editor: Window, pos: glm.vec2):
         global VAO
+        if self.texture_old:
+            self.rebuild_texture()
+            self.texture_old = False
+
+        if self.rect.pos != pos:
+            self.rect.move_to(glm.vec2(*pos))
+
         if self.pre_render_hook:
             self.pre_render_hook(self)
         gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture)
@@ -443,8 +560,16 @@ class UiElement:
     
     @final
     def rebuild_texture(self):
+        if self.texture is None:
+            self.texture = gl.glGenTextures(1)
+            gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture)
+            gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR)
+            gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
+
+        else:
+            gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture)
+            
         img = self.sprite
-        gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture)
         gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA, *img.size, 0, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, img.tobytes())
 
     # Dragging
@@ -491,8 +616,52 @@ class UiRect:
     def collide_point(self, point: glm.vec2):
         return self.left < point.x < self.right and self.top < point.y < self.bottom
 
+class Menu(UiElement):
+    def __init__(self, elements: list[UiElement]):
+        super().__init__(None, 300, 400)
+
+    def build_sprite(self):
+        width, height = self.size
+        edge = (60, 60, 60, 255)
+        center = (37, 37, 38, 255)
+
+        img = Image.new("RGBA", (int(width), int(height)))
+        img_drawer = ImageDraw.Draw(img, "RGBA")
+        img_drawer.rectangle((0, 0, width, height), outline=edge, fill=center, width=2)
+        del img_drawer
+
+        return img
+
+class MenuBar(UiElement):
+    def __init__(self, parent, **kwrds):
+        super().__init__(parent, 100, 20, **kwrds)
+
+        self.menus = {}
+
+    def clear_menus(self):
+        self.menus = {}
+
+    def add_menu(self, menu_name: str, menu_elements: list[UiElement]):
+        self.menus[menu_name] = (menu:=Menu(menu_elements), Button(None, 150, 20, menu_name, click_callback=menu.toggle_hidden))
+
+    def build_sprite(self):
+        fill = (77, 77, 78, 255)
+        edge = (107, 107, 107, 255)
+        img = Image.new("RGBA", (int(self.size.x), 20), fill)
+        draw = ImageDraw.Draw(img, "RGBA")
+        draw.line((0, 1, int(self.size.x), 1), edge, 1)
+        return img
+
+    def draw(self, editor, pos):
+        if self.size[0] != editor.size()[0]:
+            self.resize(glm.vec2(editor.size()[0], 20))
+        super().draw(editor, pos)
+
+        for menu, button in self.menus.values():
+            pass
+        
 class TextElement(UiElement):
-    def __init__(self, parent, text: str, width: float, height: float):
+    def __init__(self, parent, text: str, width: float, height: float, **kwargs):
         # The amount the text is offset from the edge of it's bounding box.
         # Left, Top, Right, Bottom
         self.edge_offset = [0, 0, 0, 0]
@@ -503,8 +672,10 @@ class TextElement(UiElement):
         self.text_draw_anchor: TextRenderAnchor = TextRenderAnchor.middle_middle
         self.old = False
 
+        self.color = (255, 255, 255)
+
         self.text_size = None
-        super().__init__(parent, width, height)
+        super().__init__(parent, width, height, **kwargs)
 
     def bold(self):
         self.style = TextStyle.BOLD
@@ -540,7 +711,7 @@ class TextElement(UiElement):
             offset.y + self.edge_offset[1]
 
         return render_text(self.message, int(self.size.x), int(self.size.y), 
-                              int(offset.x), int(offset.y), self.style, self.anchor, self.text_size)
+                              int(offset.x), int(offset.y), self.style, self.anchor, self.text_size, color=self.color)
 
     def draw(self, editor, pos):
         if self.old:
@@ -554,15 +725,13 @@ class TextElement(UiElement):
     def resize(self, size):
         super().resize(size)
 
-        offset = self.size * self.text_draw_anchor.value
-        img = render_text(self.message, int(size.x), int(size.y), int(offset.x), int(offset.y), self.style, self.anchor, self.text_size)
-        gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture)
-        gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA, *img.size, 0, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, img.tobytes())
+        self.sprite = self.build_sprite()
+        self.rebuild_texture()
     
 class Button(UiElement):
     can_claim_focus = True
-    def __init__(self, parent, width: float, height: float, text: str, click_callback: function):
-        super().__init__(parent, width, height)
+    def __init__(self, parent, width: float, height: float, text: str, click_callback: function, **kwargs):
+        super().__init__(parent, width, height, **kwargs)
 
         self.label = TextElement(None, text, width, height)
         self.click_callback = click_callback
@@ -639,8 +808,19 @@ class InputField(UiElement):
             return True
         except ValueError:
             return False
+        
+    @staticmethod
+    def validate_int(message: str):
+        message_ = message
+        if message == "-":
+            message_ = "-1"
+        try:
+            int(message_)
+            return True
+        except ValueError:
+            return False
  
-    def __init__(self, parent: EditorUiWindow | HorizontalLayout, width: float, height: float, hint: str = "", starting_message: str = "", type_: Any = str):
+    def __init__(self, parent: EditorUiWindow | HorizontalLayout, width: float, height: float, hint: str = "", starting_message: str = "", type_: Any = str, **kwargs):
         """
         Creates a new InputField object for use in the editor UI
 
@@ -652,7 +832,7 @@ class InputField(UiElement):
             starting_message (str, optional): The starting text in the input field. Defaults to "".
             type_ (Any, optional): The type to cast the text into when focus is lost. Defaults to str.
         """            
-        super().__init__(parent, width, height)
+        super().__init__(parent, width, height, **kwargs)
 
         self.hint = hint
         self.message = starting_message
@@ -828,9 +1008,9 @@ class InputField(UiElement):
 class Checkbox(UiElement):
     can_claim_focus = True
 
-    def __init__(self, parent, state: bool = False):
+    def __init__(self, parent, state: bool = False, **kwargs):
         self.state = state
-        super().__init__(parent, 20, 20)
+        super().__init__(parent, 20, 20, **kwargs)
 
     def build_sprite(self):
         if self.focused:
@@ -864,7 +1044,7 @@ class Checkbox(UiElement):
 class DropField(UiElement):
     can_claim_focus = True
  
-    def __init__(self, parent: EditorUiWindow | HorizontalLayout, width: float, height: float, hint: str = "", starting_data: DragData = None, type_: Any = type[Any]):
+    def __init__(self, parent: EditorUiWindow | HorizontalLayout, width: float, height: float, hint: str = "", starting_data: DragData = None, type_: Any = type[Any], **kwargs):
         """
         Creates a new DropField object for use in the editor UI
         
@@ -876,7 +1056,7 @@ class DropField(UiElement):
             starting_data (DragData, optional): The starting drag data. Defaults to None.
             type_ (Any, optional): The type of data accepted. Defaults to type[Any].
         """
-        super().__init__(parent, width, height)
+        super().__init__(parent, width, height, **kwargs)
 
         self.hint = hint
         self.data = starting_data
@@ -968,8 +1148,8 @@ class DropField(UiElement):
 class HorizontalLayout(UiElement):
     can_claim_focus = True
 
-    def __init__(self, parent, width, height, elems: list[UiElement] = []):
-        super().__init__(parent, width, height)
+    def __init__(self, parent, width, height, elems: list[UiElement] = [], **kwargs):
+        super().__init__(parent, width, height, **kwargs)
         self.padding = glm.vec2(10, 10)
 
         self.elems = elems
@@ -1070,11 +1250,11 @@ class HorizontalLayout(UiElement):
                 break
 
 class HorizontalLine(UiElement):
-    def __init__(self, parent: EditorUiWindow):
+    def __init__(self, parent: EditorUiWindow, **kwargs):
         width = parent.get_draw_data().size.x - parent.get_draw_data().padding.x * 2
         height = 30
 
-        super().__init__(parent, width, height)
+        super().__init__(parent, width, height, **kwargs)
 
     def build_sprite(self):
         img = Image.new("RGBA", (int(self.rect.size.x), int(self.rect.size.y)), (0, 0, 0, 0))
@@ -1086,12 +1266,12 @@ class HorizontalLine(UiElement):
 class ListView(UiElement):
     can_claim_focus = True
     class ListElement(UiElement):
-        def __init__(self, parent: ListView, value: str, idx: int):
+        def __init__(self, parent: ListView, value: str, idx: int, **kwargs):
             self.selected = False
             width = parent.size.x - parent.padding.x * 2
             height = 20
 
-            super().__init__(parent, width, height)
+            super().__init__(parent, width, height, **kwargs)
             self.__val = ListValue(value, idx)
             self.__label = TextElement(None, self.__val.val, width, height)
             self.was_focused = False
@@ -1132,8 +1312,8 @@ class ListView(UiElement):
             self.selected = input_handler.get_mouse_button_up(mouse_buttons.LEFT)
             return self.selected
 
-    def __init__(self, parent, width, height, values: list[str] = []):
-        super().__init__(parent, width, height)
+    def __init__(self, parent, width, height, values: list[str] = [], **kwargs):
+        super().__init__(parent, width, height, **kwargs)
         self.padding = glm.vec2(5, 5)
 
         self.__values = values
@@ -1180,23 +1360,17 @@ class ListView(UiElement):
         return super().focus()
     
     def draw(self, editor, pos):
-        if self.rect.pos != pos:
-            self.rect.move_to(glm.vec2(*pos))
-
         if self.focused != self.was_focused:
             self.sprite = self.build_sprite()
             self.rebuild_texture()
             self.was_focused = self.focused
 
-        gl.glEnable(gl.GL_STENCIL_TEST)
-        gl.glClearStencil(0)
-        gl.glClear(gl.GL_STENCIL_BUFFER_BIT)
         gl.glStencilOp(gl.GL_KEEP, gl.GL_KEEP, gl.GL_REPLACE)
-        gl.glStencilFunc(gl.GL_ALWAYS, 1, 0xFF)
+        gl.glStencilFunc(gl.GL_ALWAYS, 2, 0xFF)
 
         super().draw(editor, pos)
 
-        gl.glStencilFunc(gl.GL_EQUAL, 1, 0xFF)
+        gl.glStencilFunc(gl.GL_EQUAL, 2, 0xFF)
         gl.glStencilOp(gl.GL_KEEP, gl.GL_KEEP, gl.GL_KEEP)
 
         pos_ = pos + self.padding
@@ -1244,6 +1418,43 @@ class ListView(UiElement):
 class ListValue:
     val: Any
     index: int
+
+class Tab(UiElement):
+    def __init__(self, parent, width, height, text: str, **kwargs):
+        self.selected = False
+        super().__init__(parent, width, height, **kwargs)
+        self.label = TextElement(None, text, width, height)
+        self.label.set_text_size(12)
+        self.label.set_anchor("mm", TextRenderAnchor.middle_middle)
+
+        self.was_selected = False
+
+    def build_sprite(self):
+        col = (80, 80, 80, 255)
+        fill_col = (57, 57, 58)
+        if self.selected:
+            col = (80, 80, 150, 255)
+            fill_col = (57, 57, 88)
+        
+        img = Image.new("RGBA", (int(self.size.x), int(self.size.y)), (0, 0, 0, 0))
+        drawer = ImageDraw.Draw(img, "RGBA")
+        drawer.rounded_rectangle(((0, -10), (img.width, img.height)), 10, fill=fill_col, outline=col, width = 2, corners=(False, False, True, True))
+        del drawer
+
+        return img
+    
+    def draw(self, editor, pos):
+        if self.was_selected != self.selected:
+            self.was_selected = self.selected
+
+            self.sprite = self.build_sprite()
+            self.rebuild_texture()
+
+        super().draw(editor, pos)
+        self.label.draw(editor, pos)
+
+    def set_selected(self, state: bool):
+        self.selected = state
 
 def format_num(num):
     output = f"{round(num, 10):g}"

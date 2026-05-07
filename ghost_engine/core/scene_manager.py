@@ -51,27 +51,15 @@ class SceneManager:
         self.materials = {}
         SceneManager._created = True
         
-        self.compiled = not os.path.isfile(".rproj") # If there is a .rproj file, then the project has not been built yet.
-        if self.compiled:
-            self.pack = Pack()
+        self.pack = Pack()
 
         def get_index(scene_data):
             scene_name, scene_path = scene_data
-            if not self.compiled:
-                with open(scene_path, "r") as scene:
-                    data = json.load(scene)
-                    return data["scene_index"]
-                
-            else:
-                data = Pack().get_as_json_dict(scene_path)
-                return data["scene_index"]
+            data = Pack().read_json(scene_path)
+            return data["scene_index"]
 
-        if self.compiled:
-            self.scenes, self.shaders = self.load_compiled_files()
-            self.scenes = dict(sorted(self.scenes.items(), key=get_index))
-
-        else:
-            self.scenes, self.shaders = self.load_files()
+        self.scenes, self.shaders = self.load_files()
+        self.scenes = dict(sorted(self.scenes.items(), key=get_index))
 
         self.game_objects: list[Object] = []
 
@@ -87,95 +75,31 @@ class SceneManager:
         shaders = {}
         mats = set()
 
-        for dirpath, _, filenames in os.walk("assets/"):
-            for filename in filenames:
-                path = os.path.join(dirpath, filename)
-
-                if filename.endswith(".rscene"):
-                    scenes[filename.removesuffix(".rscene")] = path
-
-                elif filename.endswith(".rshader"):
-                    # Get the shader name without the .rshader extension
-                    name = filename.removesuffix(".rshader")
-                    
-                    # Load the shader file
-                    with open(path) as shader_file:
-                        shader_data = json.load(shader_file)
-                        vertex_path = shader_data.get("VertexShader", "")
-                        fragment_path = shader_data.get("FragmentShader", "")
-                        if not vertex_path or not fragment_path:
-                            continue
-                        with open(vertex_path) as f:
-                            vertex_src = f.read()
-                        with open(fragment_path) as f:
-                            fragment_src = f.read()
-                        
-                        if vertex_path and fragment_path:
-                            shaders[name] = ShaderProgram(vertex_src, fragment_src)
-                            shaders[name].use()
-                        else:
-                            Logger("SCENE MANAGEMENT").log_warning(
-                                f"Shader {name} is missing VertexShader or FragmentShader fields.")
-
-                elif filename.endswith(".rmat"):
-                    mats.add(path)
-
-        for file in mats:
-            filename = os.path.split(file)[1]
-            name = filename.removesuffix(".rmat")
-                        
-            with open(file) as material_file:
-                material_data = json.load(material_file)
-                shader_path = material_data.get("shader_path", "")
-                texture_path = material_data.get("texture_path", None)
-                properties = material_data.get("properties", {})
-                
-                shader_name = os.path.basename(shader_path).removesuffix(".rshader")
-                if shader_name in shaders.keys():
-                    shader = shaders[shader_name]
-                else:
-                    Logger("SCENE MANAGEMENT").log_warning(f"Material {name} references unknown shader {shader_name}.")
-                    continue
-
-                img = None
-                if texture_path:
-                    img = image.open(texture_path)
-                    img = img.transpose(image.FLIP_TOP_BOTTOM)
-
-                Material(name, shader, img.tobytes() if img else None, img.size if img else None, properties)
-
-        return scenes, shaders
-
-    def load_compiled_files(self):
-        scenes = {}
-        shaders = {}
-        mats = set()
-
-        for file in self.pack.files():
-            if file.endswith(".rscene"):
+        for file in self.pack.files:
+            if file.name.endswith(".rscene"):
                 name = os.path.split(file)[-1].removesuffix(".rscene")
 
                 scenes[name] = file
                 
-            elif file.endswith(".rshader"):
+            elif file.name.endswith(".rshader"):
                 name = os.path.split(file)[-1].removesuffix(".rshader")
 
-                shader_data = self.pack.get_as_json_dict(file)
+                shader_data: dict = self.pack.read_json(file)
                 vertex_path = shader_data.get("VertexShader", "assets\\GhostEngine\\base_shader.vert")
                 fragment_path = shader_data.get("FragmentShader", "assets\\GhostEngine\\base_shader.frag")
                 
                 if vertex_path and fragment_path:
-                    shaders[name] = ShaderProgram(self.pack.get(vertex_path), self.pack.get(fragment_path))
+                    shaders[name] = ShaderProgram(self.pack.get_contents(vertex_path), self.pack.get_contents(fragment_path))
                     shaders[name].use()
                 else:
                     Logger("SCENE MANAGEMENT").log_warning(f"Shader {name} is missing VertexShader or FragmentShader fields.")
 
-            elif file.endswith(".rmat"):
+            elif file.name.endswith(".rmat"):
                 mats.add(file)
 
         for file in mats:
             name = os.path.split(file)[-1].removesuffix(".rmat")
-            material_data = self.pack.get_as_json_dict(file)
+            material_data = self.pack.read_json(file)
 
             shader_path: str = material_data.get("shader_path", "")
             texture_path: str = material_data.get("texture_path", None)
@@ -304,11 +228,7 @@ class SceneManager:
                     script.on_scene_unload(scene_info)
 
         # Load new scene objects
-        if not self.compiled:
-            with open(scene_path) as scene_file:
-                scene_data = json.load(scene_file)
-        else:
-            scene_data = self.pack.get_as_json_dict(scene_path)
+        scene_data = self.pack.read_json(scene_path)
 
         self.game_objects = self._instantiate_scene_objects(scene_data)
         Logger("SCENE MANAGEMENT").log_debug(f"Loaded gameobjects for scene {scene_info.scene_name}|{scene_info.scene_index}")

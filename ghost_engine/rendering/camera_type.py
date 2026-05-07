@@ -1,12 +1,12 @@
-from ..core.exceptions import OverrideError
+from ..core.logger import Logger
 
 class CamType:
     def get_view_mat(self):
-        raise OverrideError("This function needs to be overridden!")
+        Logger.log_fatal("CamType.get_view_mat must be overridden!")
     
     def get_projection_mat(self):
-        raise OverrideError("This function needs to be overridden!")
+        Logger.log_fatal("CamType.get_projection_mat must be overridden!")
     
     def get_view_pos(self):
-        raise OverrideError("This function needs to be overridden!")
+        Logger.log_fatal("CamType.get_view_pos must be overridden!")
         

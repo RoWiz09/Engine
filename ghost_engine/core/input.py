@@ -1,5 +1,8 @@
+from typing import Callable
+
 from enum import Enum
 import glfw
+import math
 
 class MouseButtons(Enum):
     LEFT = glfw.MOUSE_BUTTON_LEFT
@@ -113,10 +116,29 @@ class Input:
 
         glfw.set_char_callback(glfw.get_current_context(), self.input_handler)
         glfw.set_key_callback(glfw.get_current_context(), self.extras_handler)
+        glfw.set_scroll_callback(glfw.get_current_context(), self.scroll_handler)
 
         self.key_press_callback = None
         self.key_extras_callback = None
         self.key_paste_callback = None
+
+        self.scroll_callback: Callable[[float, float]] = None
+
+        self.scroll_x = 0.0
+        self.scroll_y = 0.0
+
+    def scroll_handler(self, window, x_offset, y_offset):
+        self.scroll_x = max(self.scroll_x, abs(x_offset)) * math.copysign(1.0, x_offset)
+        self.scroll_y = max(self.scroll_y, abs(y_offset)) * math.copysign(1.0, y_offset)
+
+        if self.scroll_callback:
+            self.scroll_callback(x_offset, y_offset)
+
+    @property
+    def get_scroll(self) -> tuple[float, float]:
+        scroll = (self.scroll_x, self.scroll_y)
+        self.scroll_x, self.scroll_y = 0.0, 0.0
+        return scroll
 
     def input_handler(self, window, key: int):
         if self.key_press_callback:

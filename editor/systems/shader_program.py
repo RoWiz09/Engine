@@ -1,7 +1,5 @@
 from OpenGL.GL import *
 from pyglm import glm
-import numpy as np
-import ctypes
 
 def is_iterable(obj):
     try:
