@@ -1,4 +1,4 @@
-from ghost_engine.behavior import *
+from ghost_engine.scripting.behavior import *
 from ghost_engine.core.input import KeyCodes, Input, CursorStates, MouseButtons
 from ghost_engine.core.logger import Logger
 
@@ -63,4 +63,4 @@ class FPSController(Behavior):
         self.camera.transform.localrot.x = clamp(-89.0, 89.0, self.camera.transform.localrot.x)
 
         if Input().get_key(KeyCodes.k_space) and self.rigidbody.grounded:
-            self.rigidbody.add_force_vector(glm.vec3(0, self.jump_force, 0))
+            self.rigidbody.add_force(glm.vec3(0, self.jump_force, 0))

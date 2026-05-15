@@ -1,4 +1,4 @@
-from ghost_engine.behavior import *
+from ghost_engine.scripting.behavior import *
 from ghost_engine.rendering.light_type import LightType, LightTypes
 from pyglm.glm import vec3, radians
 

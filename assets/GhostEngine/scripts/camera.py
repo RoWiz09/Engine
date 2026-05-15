@@ -1,10 +1,10 @@
-from ghost_engine.behavior import Behavior, EditorField, AdvancedBehavior
+from ghost_engine.scripting.behavior import Behavior, EditorField
 from ghost_engine.rendering.camera_type import CamType
 
 from pyglm import glm
 import glfw
 
-class Camera(Behavior, CamType, AdvancedBehavior):
+class Camera(Behavior, CamType):
     category = "Rendering"
 
     rotation_mod = EditorField(glm.vec3, glm.vec3())

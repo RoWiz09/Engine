@@ -1,22 +1,18 @@
 from __future__ import annotations
 
-from ghost_engine.behavior import Behavior, EditorField, PhysicsBehavior
+from ghost_engine.scripting.behavior import Behavior, EditorField, PhysicsBehavior
+from ghost_engine.scripting.collider_type import ColliderType
+from ghost_engine.core.scene_manager import SceneManager
 
 
 from pyglm.glm import vec3
 
 
-class CubeCollider(Behavior):
-    collisions_this_frame = []
-    collisions_last_frame = []
-
-    triggers_this_frame = []
-    triggers_last_frame = []
+class CubeCollider(Behavior, ColliderType):
     category = "Physics"
 
     scale_factor = EditorField(vec3, vec3(1))
     pos_offset = EditorField(vec3, vec3(0))
-    trigger_collider = EditorField(bool, False)
 
     run_in_editor = True
 
@@ -28,6 +24,16 @@ class CubeCollider(Behavior):
             self.scale_factor = vec3(*self.scale_factor)
         center = self.gameobject.transform.pos + self.pos_offset
         half   = self.scale_factor * 0.5
+
+        min_v = center - half
+        max_v = center + half
+
+        return min_v, max_v
+    
+    def get_bounds_around(self, center: vec3):
+        if not isinstance(self.scale_factor, vec3):
+            self.scale_factor = vec3(*self.scale_factor)
+        half = self.scale_factor * 0.5
 
         min_v = center - half
         max_v = center + half
@@ -57,10 +63,12 @@ class CubeCollider(Behavior):
         cls.triggers_last_frame = cls.triggers_this_frame.copy()
         cls.triggers_this_frame.clear()
 
-    def update(self, dt):
-        from ghost_engine.core.scene_manager import SceneManager
+    @property
+    def center(self):
+        return self.gameobject.transform.pos + self.pos_offset
 
-        for obj in SceneManager().get_objects_with_component(CubeCollider):
+    def update(self, dt):
+        for obj in self.get_objects_with_component(CubeCollider):
             if obj is self.gameobject:
                 continue
 
