@@ -1,11 +1,15 @@
 from __future__ import annotations
-from .core.logger import Logger
+from ..core.logger import Logger
 
+from typing import final
 from typing import TYPE_CHECKING, Any, TypeAlias
+
 if TYPE_CHECKING:
-    from .object import Object as object
+    from ..object import Object as object
+    from .collider_type import CollisionInfo
 else:
     object: TypeAlias = Any
+    collider: TypeAlias = Any
 
 def register_editor_button(func):
     Behavior.editor_button_registry.append(func)
@@ -89,57 +93,57 @@ class PhysicsBehavior:
     """
 
     # Collisions
-    def on_collision_start(self, other: object):
+    def on_collision_start(self, other: CollisionInfo):
         """
         Called upon a collision 'starting', or the first collision between two gameobjects.
         
-        :param other: The colliding gameobject
+        :param other: The colliding collision object
         :type other: Object
         """
         pass
 
-    def on_collision(self, other: object):
+    def on_collision(self, other: CollisionInfo):
         """
         Continuously called while there is a collision between two gameobjects.
         
-        :param other: The colliding gameobject
+        :param other: The colliding collision object
         :type other: Object
         """
         pass
 
-    def on_collision_exit(self, other: object):
+    def on_collision_exit(self, other: CollisionInfo):
         """
         Called when there is no longer a collision between two gameobjects.
         
-        :param other: The gamobject collided with
+        :param other: The collision object collided with
         :type other: Object
         """
         pass
 
     # Triggers
-    def on_trigger_start(self, other: object):
+    def on_trigger_start(self, other: CollisionInfo):
         """
         Called upon a trigger 'starting', or the first trigger collision between two gameobjects.
         
-        :param other: The colliding gameobject
+        :param other: The colliding collision object
         :type other: Object
         """
         pass
 
-    def on_trigger(self, other: object):
+    def on_trigger(self, other: CollisionInfo):
         """
         Continuously called while there is a trigger collision between two gameobjects.
         
-        :param other: The colliding gameobject
+        :param other: The colliding collision object
         :type other: Object
         """
         pass
 
-    def on_trigger_exit(self, other: object):
+    def on_trigger_exit(self, other: CollisionInfo):
         """
         Called when there is no longer a trigger collision between two gameobjects.
         
-        :param other: The gamobject collided with
+        :param other: The collision object collided with
         :type other: Object
         """
         pass
@@ -180,8 +184,16 @@ class Behavior:
     - `on_scene` (`_load` / `_unload`): Called when a scene is loaded or unloaded, respectively. Most useful when attached to static objects.
     """
     component_category_registry: dict[str, list[Behavior]] = {}
+    """
+        A dictionary which contains the category string, as well as a list of behaviors which belong to it.
+    """
+
+    component_instances = {}
+    """
+        A dictionary which binds every behavior type to a set with every gameobject with it.
+    """
+
     category = "General"
-    
     editor_button_registry = []
 
     def __init_subclass__(cls, **kwargs):
@@ -194,15 +206,26 @@ class Behavior:
         if not cls.category in Behavior.component_category_registry.keys():
             Behavior.component_category_registry[cls.category] = []
         Behavior.component_category_registry[cls.category].append(cls)
-        
+        Behavior.component_instances[cls] = set()
+    
+    @classmethod
+    def from_inst(cls, inst: Behavior):
+        new_inst = cls(inst.gameobject)
+        for var in vars(inst):
+            value = getattr(inst, var)
+            setattr(new_inst, var, value)
+
+        return new_inst
+
     def __init__(self, gameobject: object):
         try:
             super().__init__(gameobject)
         except:
             super().__init__()
-        from .object import Object
-        self.__gameobject: Object = gameobject
+        self.__gameobject: object = gameobject
         self.__enabled = True
+
+        self.component_instances[type(self)].add(gameobject)
     
     init_method: InitMethod = None
     init_vars = []
@@ -224,7 +247,7 @@ class Behavior:
 
     @property
     def window(self):
-        from .core.window import Window
+        from ..core.window import Window
         return Window()
     
     # Frame methods
@@ -273,6 +296,10 @@ class Behavior:
                 scene_info (SceneInfo): The SceneInfo object for the unloaded scene
         """
         pass
+
+    @staticmethod
+    def get_objects_with_component(component: type[Behavior]) -> set[object]:
+        return Behavior.component_instances[component]
 
 class EditorField:
     def __init__(self, field_type: type, default=None):

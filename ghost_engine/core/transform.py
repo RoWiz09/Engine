@@ -23,6 +23,12 @@ class Transform:
         self.__parent: Transform = parent
         self.gameobject: Object = None
 
+    def copy_state(self):
+        pos = glm.vec3(self.localpos)
+        rot = glm.vec3(self.localrot)
+        scale = glm.vec3(self.scale)
+        return pos, rot, scale
+
     @property
     def pos(self):
         if self.__parent:

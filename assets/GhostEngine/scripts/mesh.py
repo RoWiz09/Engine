@@ -1,4 +1,4 @@
-from ghost_engine.behavior import Behavior, RenderBehavior, EditorField, InitMethod, register_editor_button
+from ghost_engine.scripting.behavior import Behavior, RenderBehavior, EditorField, InitMethod, register_editor_button
 from ghost_engine.core.logger import Logger
 
 from ghost_engine.core.packer import Pack

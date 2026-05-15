@@ -1,3 +1,5 @@
+from typing_extensions import deprecated
+
 from ..rendering.shader_program import ShaderProgram
 from ..rendering.material import Material
 from .transform import Transform
@@ -5,7 +7,7 @@ from .packer import Pack
 from ..object import Object 
 from .input import Input, KeyCodes
 
-from ..behavior import *
+from ..scripting.behavior import *
 
 from ..rendering.camera_type import CamType
 from ..rendering.light_type import LightType
@@ -239,6 +241,7 @@ class SceneManager:
                 for script in obj.components:
                     script.on_scene_load(scene_info)
 
+    @deprecated("")
     def get_objects_with_component(self, component_class) -> list[Object]:
         objects = []
         for object in self.game_objects:
