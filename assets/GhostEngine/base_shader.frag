@@ -48,32 +48,17 @@ uniform int uNumSpotLights;
 
 vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
 {
-    vec3 L = normalize(light.position.xyz - fragPos);
-    float distance = length(light.position.xyz - fragPos);
+    float intensity = light.position.w;
+    float distance_ = length(light.position.xyz - fragPos) / light.attenuation.w;
+    float rangeFade = 1.0 - clamp(distance_, 0.0, 1.0);
 
-    if (distance > light.attenuation.w)
-        return vec3(0.0);
-
-    float diff = max(dot(normal, L), 0.0);
-    vec3 H = normalize(L + viewDir);
-    float spec = pow(max(dot(normal, H), 0.0), 32.0);
-
-    float atten = 1.0 / (
-        light.attenuation.x +
-        light.attenuation.y * distance +
-        light.attenuation.z * distance * distance
+    float facing = dot(normal, light.position.xyz);
+    facing = clamp(
+        facing, 0.0, 1.0
     );
 
-    float rangeFade = 1.0 - clamp(distance / light.attenuation.w, 0.0, 1.0);
-    atten *= rangeFade * rangeFade;
-
-    vec3 color = light.color.rgb / vec3(255.0);
-
-    vec3 ambient  = light.ambient.rgb  * color;
-    vec3 diffuse  = light.diffuse.rgb  * diff * color;
-    vec3 specular = light.specular.rgb * spec * color;
-
-    return (ambient + diffuse + specular) * atten * light.position.w;
+    vec3 color = light.color.rgb / vec3(255.0) * intensity;
+    return (color * rangeFade) * facing;
 }
 
 vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
@@ -95,15 +80,19 @@ vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
     if (intensity <= 0.0)
         return vec3(0.0);
 
-    float distance = length(light.position.xyz - fragPos);
+    float distance_ = length(light.position.xyz - fragPos);
+    float facing = dot(normal, light.position.xyz);
+    facing = clamp(
+        facing, 0.0, 1.0
+    );
 
     float atten = 1.0 / (
         light.attenuation.x +
-        light.attenuation.y * distance +
-        light.attenuation.z * distance * distance
+        light.attenuation.y * distance_ +
+        light.attenuation.z * distance_ * distance_
     );
 
-    float rangeFade = 1.0 - clamp(distance / light.attenuation.w, 0.0, 1.0);
+    float rangeFade = 1.0 - clamp(distance_ / light.attenuation.w, 0.0, 1.0);
     atten *= rangeFade * rangeFade;
 
     float diff = max(dot(normal, L), 0.0);
@@ -116,7 +105,7 @@ vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
     vec3 diffuse  = light.diffuse.rgb  * diff * color;
     vec3 specular = light.specular.rgb * spec * color;
 
-    return (ambient + diffuse + specular) * atten * intensity * light.position.w;
+    return (ambient + diffuse + specular) * atten * intensity * light.position.w * facing;
 }
 
 void main()

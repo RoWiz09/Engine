@@ -3,7 +3,7 @@ import numpy as np
 
 import glfw
 
-from . import globals as modules
+from . import global_vars as modules
 
 Input = None
 KeyCodes = None

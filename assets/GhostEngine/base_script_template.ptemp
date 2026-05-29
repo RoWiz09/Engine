@@ -1,0 +1,8 @@
+from ghost_engine.behavior import Behavior
+
+class ClassName(Behavior):
+    def __init__(self, gameobject):
+        super().__init__(gameobject)
+
+    def update(self, dt):
+        return super().update(dt)

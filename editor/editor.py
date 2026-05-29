@@ -2,8 +2,6 @@ from __future__ import annotations
 from typing_extensions import overload
 from pathlib import Path
 
-from systems.argument_parser import ArgumentParser
-
 import glfw
 import os, OpenGL.GL as gl
 
@@ -13,7 +11,9 @@ from systems.window_drawer import WindowDrawer
 from systems.window_docker import *
 from systems.editor_windows import *
 
-from systems import globals as modules
+from systems.build import build_game
+
+from systems import global_vars
 
 import json
 
@@ -47,10 +47,12 @@ class Window:
         if not glfw_initalized:
             glfw.init()
 
+        
+        ConsoleLogger().can_write_to_console = global_vars.ARGS.enable_console
         self.logger = Logger("EDITOR")
 
-        # Set the modules.editor_window variable, for easy, global access of this instance.
-        modules.editor_window = self
+        # Set the global_vars.editor_window variable, for easy, global access of this instance.
+        global_vars.editor_window = self
 
         glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
         glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
@@ -78,6 +80,7 @@ class Window:
         with open(".rproj") as project_file:
             self.project_data = json.load(project_file)
         os.environ["project"] = self.project_data["name"]
+        build_game()
 
         glfw.set_window_title(self.window, "GhostEngine Editor - " + self.project_data["name"])
 
@@ -126,13 +129,18 @@ class Window:
         self.scene_manager.load_scene_index_async(0, alert_scripts = False)
         Hierarchy.rebuild_windows()
 
+        self.setup_root_menu_bar()
+
         self.last_time = glfw.get_time()
+
+    def setup_root_menu_bar(self):
+        self.drawer.top_bar.add_menu("AAA")
 
     def should_close(self):
         return glfw.window_should_close(self.window)
     
     def setup_pack(self):
-        def pack_init(self: modules.Pack):
+        def pack_init(self: global_vars.Pack):
             self.files_ = []
 
             assets = Path("assets")
@@ -142,47 +150,48 @@ class Window:
                     continue
 
                 for file in filenames:
-                    self.files_.append(dirpath / file)                
+                    self.files_.append(dirpath / file)
 
-        get_decorator = getattr(modules.pack, "_Pack__get_decorator")
+        get_decorator = getattr(global_vars.pack, "_Pack__get_decorator")
         @get_decorator
-        def pack_get_contents(self: modules.Pack, path: modules.PathLike):
+        def pack_get_contents(self: global_vars.Pack, path: global_vars.PathLike):
             return path.read_text()
         
         @get_decorator
-        def pack_get_raw(self: modules.Pack, path: modules.PathLike):
+        def pack_get_raw(self: global_vars.Pack, path: global_vars.PathLike):
             return path.read_text().encode()
         
         @get_decorator
-        def pack_read_json(self: modules.Pack, path: modules.PathLike):
+        def pack_read_json(self: global_vars.Pack, path: global_vars.PathLike):
             return json.loads(path.read_text())
         
         @property
-        def pack_files(self: modules.Pack):
+        def pack_files(self: global_vars.Pack):
             return self.files_
         
-        setattr(modules.pack, "__init__", pack_init)
-        setattr(modules.pack, "get_contents", pack_get_contents)
-        setattr(modules.pack, "get_raw", pack_get_raw)
-        setattr(modules.pack, "read_json", pack_read_json)
-        setattr(modules.pack, "files", pack_files)
+        setattr(global_vars.pack, "__init__", pack_init)
+        setattr(global_vars.pack, "get_contents", pack_get_contents)
+        setattr(global_vars.pack, "get_raw", pack_get_raw)
+        setattr(global_vars.pack, "read_json", pack_read_json)
+        setattr(global_vars.pack, "files", pack_files)
 
     def setup_async_loading(self):
-        def load_scene_index_async(self: modules.SceneManager, scene_index: int, alert_scripts: bool = True):
+        def load_scene_index_async(self: global_vars.SceneManager, scene_index: int, alert_scripts: bool = True):
             Logger("SCENE MANAGEMENT").log_debug(f"Loading scene {scene_index} asynchronously")
             async def load(scene_index, alert_scripts):
                 self.load_scene_index(scene_index, alert_scripts)
 
             asyncio.run(load(scene_index, alert_scripts))
 
-        def load_scene_async(self: modules.SceneManager, scene_name: str, alert_scripts: bool = True):
+        def load_scene_async(self: global_vars.SceneManager, scene_name: str, alert_scripts: bool = True):
+            Logger("SCENE MANAGEMENT").log_debug(f"Loading scene {scene_name} asynchronously")
             async def load(scene_name, alert_scripts):
                 self.load_scene(scene_name, alert_scripts)
 
             asyncio.run(load(scene_name, alert_scripts))
 
-        setattr(modules.scene_manager, "load_scene_index_async", load_scene_index_async)
-        setattr(modules.scene_manager, "load_scene_async", load_scene_async)
+        setattr(global_vars.scene_manager, "load_scene_index_async", load_scene_index_async)
+        setattr(global_vars.scene_manager, "load_scene_async", load_scene_async)
 
     def render_scene(self, frame_buffer = None):
         frame_buffer = frame_buffer if frame_buffer else self.scene_framebuffer
@@ -203,6 +212,9 @@ class Window:
         gl.glDisable(gl.GL_DEPTH_TEST)
 
     def update(self):
+        if glfw.get_window_attrib(self.window, glfw.ICONIFIED) != 0:
+            return
+        
         cur_time = glfw.get_time()
         dt = cur_time - self.last_time
         self.last_time = cur_time
@@ -240,10 +252,7 @@ class Window:
     def terminate(self):
         glfw.terminate()
 
-arg_parser = ArgumentParser()
-arg_parser.add_argument("project-path")
-
-arg_parser.parse()
+        self.scene_manager.save()
 
 def get_path(location: str):
     if not location.endswith(".rproj") and os.path.exists(location):
@@ -252,11 +261,12 @@ def get_path(location: str):
     
     return os.path.split(location)[0]
 
-base_path = get_path(arg_parser.get_arg("project-path"))
+global_vars.parse_args()
+base_path = get_path(global_vars.ARGS.project)
 os.chdir(base_path)
-Logger, SceneManager, Input = modules.get_modules(base_path)
-modules.logger_module.configure_loggers(log_to_console = True, log_level = modules.logger_module.LoggingLevels.DEBUG)
-KeyCodes, MouseButtons = modules.key_codes, modules.mouse_buttons
+Logger, SceneManager, Input = global_vars.get_modules(base_path)
+global_vars.logger_module.configure_loggers(log_to_console = True, log_level = global_vars.logger_module.LoggingLevels.DEBUG)
+KeyCodes, MouseButtons = global_vars.key_codes, global_vars.mouse_buttons
 
 window = Window(base_path)
 while not window.should_close():

@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from ghost_engine.core.input import Input
     
     from ghost_engine.core.input import KeyCodes, MouseButtons
-    from ghost_engine.behavior import EditorField
+    from ghost_engine.scripting.behavior import EditorField
     from ghost_engine.core import logger as LoggerModule
     from ghost_engine.core.packer import Pack, PathLike 
 
@@ -39,6 +39,17 @@ else:
     pack: type = None
 
     editor_window = None
+
+from argparse import ArgumentParser
+
+ARGS = None
+def parse_args():
+    global ARGS
+    parser = ArgumentParser()
+    parser.add_argument("project", type=str)
+    parser.add_argument("--enable-console", action='store_true')
+
+    ARGS = parser.parse_args()
 
 GL_FUNC_LOCK = threading.Lock()
 
@@ -71,7 +82,7 @@ def get_modules(base_path: str):
 
     key_codes = getattr(init_module, "KeyCodes") 
     mouse_buttons = getattr(init_module, "MouseButtons")
-    editor_field = getattr(sys.modules["ghost_engine.behavior"], "EditorField")
+    editor_field = getattr(sys.modules["ghost_engine.scripting.behavior"], "EditorField")
     pack = getattr(sys.modules["ghost_engine.core.packer"], "Pack")
     getattr(init_module, "setup")()
 

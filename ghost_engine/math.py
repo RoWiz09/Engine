@@ -7,3 +7,6 @@ class Vector3:
 
 def clamp(min_val, max_val, val):
     return min(max(min_val, val), max_val)
+
+def triple_product(a: glm.vec3, b: glm.vec3, c: glm.vec3):
+    return glm.cross(a, glm.cross(b, c))

@@ -1,9 +1,9 @@
-from . import globals
+from . import global_vars
 
 from typing import TYPE_CHECKING
 from types import MappingProxyType
 if TYPE_CHECKING:
-    from ghost_engine import behavior
+    from ghost_engine.scripting import behavior
 
 from pathlib import Path
 import os, struct
@@ -54,8 +54,8 @@ def write_packs():
         exclude_from_build = behavior.EXCLUDED_FROM_BUILD
 
     else:
-        behavior_type = getattr(sys.modules["ghost_engine.behavior"], "Behavior")
-        exclude_from_build = getattr(sys.modules["ghost_engine.behavior"], "EXCLUDED_FROM_BUILD")
+        behavior_type = getattr(sys.modules["ghost_engine.scripting.behavior"], "Behavior")
+        exclude_from_build = getattr(sys.modules["ghost_engine.scripting.behavior"], "EXCLUDED_FROM_BUILD")
 
     for dlc_name, dlc_data in dlcs:
         dlc_root: str = dlc_data["root"]

@@ -3,8 +3,11 @@ from __future__ import annotations
 import OpenGL.GL as gl
 
 from .window_drawer import *
+from .simple_elements import *
+from .complex_elements import *
+
 from .font import TextStyle
-from . import globals
+from . import global_vars
 
 from .console import ConsoleLogger
 
@@ -18,6 +21,10 @@ import asyncio
 import colorama
 from enum import Enum
 from dataclasses import dataclass
+from pathlib import Path
+import os
+
+from .reload_behaviors import reload_behaviors
 
 class SceneView(EditorUiWindow):
     name = "Scene"
@@ -26,7 +33,7 @@ class SceneView(EditorUiWindow):
         self.view = UiElement(self, 0, 0)
         self.view.resize_callback = self.view_resize_callback
 
-        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, globals.editor_window.scene_framebuffer)
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, global_vars.editor_window.scene_framebuffer)
         gl.glFramebufferTexture2D(gl.GL_READ_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0, gl.GL_TEXTURE_2D, self.view.texture, 0)
 
         self.rbo = gl.glGenRenderbuffers(1)
@@ -37,7 +44,7 @@ class SceneView(EditorUiWindow):
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
 
     def view_resize_callback(self, view: UiElement):
-        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, globals.editor_window.scene_framebuffer)
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, global_vars.editor_window.scene_framebuffer)
         gl.glFramebufferTexture2D(gl.GL_READ_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0, gl.GL_TEXTURE_2D, self.view.texture, 0)
 
         gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, self.rbo)
@@ -124,12 +131,12 @@ class Inspector(EditorUiWindow):
                 return
             
             if parentField.get_value().object_data in get_children(data):
-                globals.logger("INSPECTOR").log_error("Cannot set the parent of an object to one of it's children!")
+                global_vars.logger("INSPECTOR").log_error("Cannot set the parent of an object to one of it's children!")
                 parentField.data = None
                 return
             
             elif parentField.get_value().object_data == data:
-                globals.logger("INSPECTOR").log_error("Cannot parent an object to itself!")
+                global_vars.logger("INSPECTOR").log_error("Cannot parent an object to itself!")
                 parentField.data = None
                 return
             data.transform.parent = parentField.get_value().object_data.transform
@@ -144,19 +151,27 @@ class Inspector(EditorUiWindow):
             TextElement(self, comp_class.__name__, self.renderable_width, 30)
 
             for var_name, var_data in vars(comp_class).items():
-                if isinstance(var_data, globals.editor_field):
+                if isinstance(var_data, global_vars.editor_field):
                     var = getattr(component, var_name)
                     if var_data.type == glm.vec3:
                         build_vec3_input(self, var)
 
                     elif var_data.type == float:
-                        InputField(self, self.renderable_width, 20, var_name, str(var), float)
+                        input_field = InputField(self, self.renderable_width, 20, var_name, str(var), float)
+                        input_field.command = lambda f, c=component, s=var_name: setattr(c, s, f.get_value() if f.get_value() else 1.0)
+                        input_field.validate_command = InputField.validate_float
 
                     elif var_data.type == str:
                         InputField(self, self.renderable_width, 20, var_name, var, str)
                     
                     elif var_data.type == bool:
-                        Checkbox(self, var)
+                        HorizontalLayout(
+                            self, 
+                            self.renderable_width, 30, 
+                            [
+                                TextElement(self, var_name, 100, 20), 
+                                Checkbox(self, var)
+                        ])
 
     async def build(self, data):
         self.scroll = 0.0
@@ -188,7 +203,7 @@ class Hierarchy(EditorUiWindow):
         self.draw_data.padding.x = 5
         self.draw_data.padding.y = 5
 
-        self.manager = globals.scene_manager()
+        self.manager = global_vars.scene_manager()
         self.object_buttons: set[Button] = set()
 
         self.object_type = None
@@ -255,7 +270,7 @@ class Scenes(EditorUiWindow):
     name = "Scenes"
     def __init__(self):
         super().__init__()
-        self.scene_manager = globals.scene_manager()
+        self.scene_manager = global_vars.scene_manager()
         self.draw_data.padding = glm.vec2(10, 10)
         self.list_view = ListView(self, self.renderable_width, self.renderable_height, self.scene_manager.scenes)
         self.list_view.select_item_callback = self.select_scene_callback
@@ -315,11 +330,10 @@ class LogStr:
 class ConsoleWindow(EditorUiWindow):
     name = "Console"
     console = ConsoleLogger()
+    default_max_scroll = True
     def __init__(self):
         super().__init__()
         self.console.write_callback = self.update
-
-        self.set_scroll_on_add = True
 
         self.draw_data.padding.x = 10
         self.draw_data.padding.y = 10
@@ -370,10 +384,10 @@ class ConsoleWindow(EditorUiWindow):
         elem.parent = self
 
         with self.list_lock:
-            self.ui_elements.reverse()
-            self.ui_elements.insert(0, elem)
-            self.ui_elements = self.ui_elements[:self.console.max_length]
-            self.ui_elements.reverse()
+            self.ui_elements.append(elem)
+            self.ui_elements = self.ui_elements[-self.console.max_length:]
+
+        self.update_max_scroll()
 
     def resize(self, new_width, new_height):
         super().resize(new_width, new_height)
@@ -391,3 +405,59 @@ class FileViewer(EditorUiWindow):
     name = "Files"
     def __init__(self):
         super().__init__()
+
+        self.layout_mode = LayoutMode.HORIZONTAL
+        self.draw_data.padding.x = 10
+        self.draw_data.padding.y = 10
+
+        self.old = True
+
+        self.selected_dir = Path("assets")
+
+    def route_to(self, new_path: Path):
+        self.selected_dir = new_path
+        self.old = True
+
+    async def build(self):
+        self.ui_elements.clear()
+        Button(self, 100, 100, "Back", lambda: self.route_to(Path(os.sep.join(self.selected_dir.parts[:-1]))))
+        for file in sorted(os.listdir(self.selected_dir), key=lambda x: (not (self.selected_dir / x).is_dir(), x.lower())):
+            filepath = self.selected_dir / file
+            # Exclude __pycache__ from directory list
+            if file == "__pycache__": 
+                continue
+
+            if filepath.is_dir() and not filepath.name.startswith("."):
+                Button(self, 100, 100, filepath.name, lambda f = filepath: self.route_to(f))
+
+            elif filepath.is_file():
+                # Now we need to get the file type!
+                file_suffix = filepath.suffix
+                if file_suffix == ".py":
+                    Button(self, 100, 100, filepath.name, lambda f = filepath: os.system(f"code -r assets {str(f)}"))
+
+                elif file_suffix == ".rscene":
+                    Button(self, 100, 100, filepath.name, lambda f = filepath: modules.scene_manager().load_scene_async(filepath.name.removesuffix(".rscene"), alert_scripts=False))
+
+        self.update_max_scroll()
+
+    def open_new_file_subpopup(self, popup: Popup, button):
+        subpopup = popup.open_subpopup(button)
+        Button(subpopup, 75, 20, "New Script", lambda: print("New Script Requested!"))
+
+    def handle_input(self, key_codes, mouse_buttons, input_handler):
+        if input_handler.get_mouse_button_down(mouse_buttons.RIGHT):
+            popup = open_popup(glm.vec2(input_handler.mouse_pos))
+            button = Button(popup, 75, 20, "New File...", None)
+            button.click_callback = lambda p=popup, b=button: self.open_new_file_subpopup(p, b)
+            button = Button(popup, 75, 20, "Reload", reload_behaviors)
+            popup.register()
+
+        return super().handle_input(key_codes, mouse_buttons, input_handler)
+
+    def draw(self, editor):
+        if self.old:
+            asyncio.run(self.build())
+            self.old = False
+
+        return super().draw(editor)

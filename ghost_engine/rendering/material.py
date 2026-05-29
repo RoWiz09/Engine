@@ -28,7 +28,7 @@ class Material:
         self.texture = gl.glGenTextures(1)
         if not texture_data:
             # Create a default white texture
-            white_pixel = [255, 255, 255, 255]
+            white_pixel = [238, 0, 255, 255]
             gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture)
             gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA, 1, 1, 0, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, bytes(white_pixel))
             gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR)

@@ -5,7 +5,7 @@ from .core.logger import Logger
 from .rendering.material import Material
 from .core.transform import Transform
 
-from .behavior import Behavior, RenderBehavior
+from .scripting.behavior import Behavior, RenderBehavior
 import sys
 
 from typing import TypeVar
@@ -75,12 +75,12 @@ class Object:
                 component.fixed_update()
 
     # Components
-    def get_component(self, component_class: T) -> type[T]:
+    def get_component(self, component_class: type[T]) -> T:
         for component in self.components:
             if isinstance(component, component_class) and component.enabled:
                 return component
             
-    def get_components(self, component_class: T) -> list[type[T]]:
+    def get_components(self, component_class: type[T]) -> list[T]:
         out = []
         for component in self.components:
             if isinstance(component, component_class) and component.enabled:

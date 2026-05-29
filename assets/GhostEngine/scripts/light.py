@@ -6,10 +6,6 @@ class Pointlight(Behavior, LightType):
     light_type = LightTypes.POINT
     category = "Rendering"
 
-    ambient = EditorField(vec3, vec3(0.05, 0.05, 0.05))
-    diffuse = EditorField(vec3, vec3(1.0, 1.0, 1.0))
-    specular = EditorField(vec3, vec3(1.0, 1.0, 1.0))
-
     intensity = EditorField(float, 1)
     color = EditorField(vec3, vec3(255, 255, 255))
 
@@ -25,10 +21,6 @@ class Pointlight(Behavior, LightType):
 class Spotlight(Behavior, LightType):
     light_type = LightTypes.SPOT
     category = "Rendering"
-    
-    ambient = EditorField(vec3, vec3(0.05, 0.05, 0.05))
-    diffuse = EditorField(vec3, vec3(1.0, 1.0, 1.0))
-    specular = EditorField(vec3, vec3(1.0, 1.0, 1.0))
 
     intensity = EditorField(float, 1)
     color = EditorField(vec3, vec3(255, 255, 255))

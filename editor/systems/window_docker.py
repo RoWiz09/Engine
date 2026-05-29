@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Optional, Literal, Any, TypeAlias
 
 from .editor_windows import *
-from . import globals as modules
+from . import global_vars as modules
 
 from pyglm import glm
 from typing import TYPE_CHECKING

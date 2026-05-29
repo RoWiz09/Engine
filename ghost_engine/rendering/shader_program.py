@@ -16,11 +16,8 @@ def is_iterable(obj):
 class PointLightUBO(ctypes.Structure):
     _fields_ = [
         ("position",    ctypes.c_float * 4),  # xyz + intensity
-        ("ambient",     ctypes.c_float * 4),
-        ("diffuse",     ctypes.c_float * 4),
-        ("specular",    ctypes.c_float * 4),
         ("color",       ctypes.c_float * 4),
-        ("attenuation", ctypes.c_float * 4),  # constant, linear, quadratic, range
+        ("range", ctypes.c_float),  # Range
     ]
 
 
