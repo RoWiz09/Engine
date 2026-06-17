@@ -11,7 +11,9 @@ import struct
 import enum
 import json
 import io
-import os
+
+import types
+import sys
 
 MIN_SUPPORT = 0
 MAX_SUPPORT = 0
@@ -194,7 +196,7 @@ class Pack:
         self.strict = kwds.pop("strict", True)
         
         global MIN_SUPPORT, MAX_SUPPORT
-        build_path = Path("build")
+        build_path = Path("data")
         master_file = open(build_path / "mdlc.mrpk", "rb")
         magic, MIN_SUPPORT, MAX_SUPPORT, section_count = struct.unpack("<4sHHI", master_file.read(12))
 
@@ -222,6 +224,49 @@ class Pack:
 
         Pack._initalized = True
 
+        # Behavior loading
+        behavior_globals = {}
+        self.behavior_globals = behavior_globals
+
+        self.module_to_path = lambda m: Path(*m.split("."))
+        def get_behavior_data(module: str, globals={}, locals=None, fromlist=(), level=0) -> types.ModuleType:
+            Logger("PACK BEHAVIORS").write_to_log(f"""
+Importing {module}
+- With Fromlist: {fromlist}
+- At Level     : {level}
+""", LoggingLevels.DEBUG)
+            if level == 0 and not module.startswith("assets"):
+                return __import__(module, globals, locals, fromlist, level)
+
+            module = ".".join(submodule[:len(submodule)-(level-1)]) + "." + module if len(submodule:=globals.get("__package__", "").split(".")) > 0 else module
+
+            if module in sys.modules:
+                Logger("PACK BEHAVIORS").write_to_log(f"""
+Importing already initalized module: {module}
+- With Fromlist: {fromlist}
+""")
+                return sys.modules[module]
+            
+            file_path = self.module_to_path(module)
+            data = self.file_links[suffixed_path:=file_path.with_suffix(".py")].read_file(suffixed_path)
+
+            behavior_module = types.ModuleType(module)
+            behavior_module.__package__ = ".".join(module.split(".")[:-1])
+
+            import builtins
+            behavior_module_builtins = builtins.__dict__.copy()
+            behavior_module_builtins["__import__"] = get_behavior_data
+            behavior_module.__dict__["__builtins__"] = behavior_module_builtins
+
+            sys.modules[module] = behavior_module
+
+            compiled_code = compile(data, file_path, "exec")
+            exec(compiled_code, behavior_module.__dict__)
+
+            return behavior_module
+        
+        self.__get_behavior_data = get_behavior_data
+        
     @property
     def files(self):
         return list(self.file_links.keys())
@@ -244,11 +289,12 @@ class Pack:
         return self.dlc[dlc_name]
     
     def __get_decorator(func):
-        def wrapper(self, file_path: PathLike):
+        def wrapper(self, *args):
+            file_path = args[0]
             if isinstance(file_path, str):
                 file_path = Path(file_path)
 
-            return func(self, file_path)
+            return func(self, file_path, *args[1:])
 
         return wrapper 
 
@@ -264,3 +310,15 @@ class Pack:
     def read_json(self, file_path: PathLike):
         data = self.file_links[file_path].read_file(file_path)
         return json.loads(data.decode())
+    
+
+    def load_behavior(self, module: str, behavior_class: str):
+        if not module in sys.modules:
+            module_data = self.__get_behavior_data(module)
+        else:
+            module_data = sys.modules[module]
+
+        if hasattr(module_data, behavior_class):
+            return getattr(module_data, behavior_class)
+        else:
+            Logger("PACK BEHAVIORS").log_fatal(f"{module} is missing requested class {behavior_class}")

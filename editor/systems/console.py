@@ -1,5 +1,4 @@
-import threading
-import colorama
+from . import global_vars
 import sys
 
 def static_class(cls):
@@ -27,12 +26,14 @@ class ConsoleLogger:
         self.cur_line = ""
 
     def write_to_console(self, data):
-        self.__console_logger.write(data + "\n")
-        self.__console_logger.flush()
+        if global_vars.ARGS.enable_console:
+            self.__console_logger.write(data + "\n")
+            self.__console_logger.flush()
 
     def write(self, data):
         data = str(data)
-        self.__console_logger.write(data)
+        if global_vars.ARGS.enable_console:
+            self.__console_logger.write(data)
 
         self.cur_line += data
         if "\n" in self.cur_line:

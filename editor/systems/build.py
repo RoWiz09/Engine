@@ -1,29 +1,37 @@
 from . import global_vars
 
 from typing import TYPE_CHECKING
-from types import MappingProxyType
 if TYPE_CHECKING:
     from ghost_engine.scripting import behavior
 
 from pathlib import Path
+
+import PyInstaller.__main__ as pyinstaller
+from PyInstaller.utils.hooks import collect_dynamic_libs
+
 import os, struct
 import importlib
 import inspect
 import hashlib
 import json
-import copy
 import sys
-import os
 
-def build_game():
+def build_game(*dynamic_libs):
     print("Building the game...")
+    print(collect_dynamic_libs('glfw'))
+    (libs:=[]).extend([f"--add-binary={lib[0]}:{lib[1]}" for lib in collect_dynamic_libs('glfw')])
+    for lib_name in dynamic_libs:
+        libs.extend([f"--add-binary={lib[0]}:{lib[1]}" for lib in collect_dynamic_libs(lib_name)])
 
     # Build the executable using PyInstaller
-    try:
-        if os.system("py -m PyInstaller main.py") != 0:
-            print("Failed to build the executable.")
-    except Exception as e:
-        print(f"Error during build: {e}")
+    pyinstaller.run([
+        os.environ["project"] + ".py",
+        '--onefile',
+        '--windowed',
+        f'--name={os.environ["project"]}',
+        f'--distpath={str("dist" / Path(os.environ["project"]))}',
+        *libs
+    ])
 
     print("Writing asset packs...")
 
@@ -39,7 +47,7 @@ def write_packs():
     """
 
     assets_path = Path("assets")
-    output_path = Path(f"dist/{os.environ["project"]}")
+    output_path = "dist" / Path(f"{os.environ["project"]}") / "data"
     output_path.mkdir(parents=True, exist_ok=True)
     dlcs: list[tuple[str, dict]] = [("edlc", {"root": "GhostEngine"})]
     with open(".rproj") as project_file:

@@ -2,10 +2,10 @@ from typing_extensions import overload
 from pyglm import glm
 from typing import TYPE_CHECKING, TypeAlias, Any
 if TYPE_CHECKING:
-    from ..object import Object
+    from ..object import GameObject
 
 else:
-    Object: TypeAlias = Any
+    GameObject: TypeAlias = Any
 
 import numpy as np
 
@@ -21,7 +21,7 @@ class Transform:
         self.scale = scale
 
         self.__parent: Transform = parent
-        self.gameobject: Object = None
+        self.gameobject: GameObject = None
 
     def copy_state(self):
         pos = glm.vec3(self.localpos)

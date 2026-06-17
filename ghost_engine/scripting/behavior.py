@@ -5,7 +5,7 @@ from typing import final
 from typing import TYPE_CHECKING, Any, TypeAlias
 
 if TYPE_CHECKING:
-    from ..object import Object as object
+    from ..object import GameObject as object
     from .collider_type import CollisionInfo
 else:
     object: TypeAlias = Any
@@ -188,7 +188,7 @@ class Behavior:
         A dictionary which contains the category string, as well as a list of behaviors which belong to it.
     """
 
-    component_instances = {}
+    behavior_instances = {}
     """
         A dictionary which binds every behavior type to a set with every gameobject with it.
     """
@@ -206,7 +206,7 @@ class Behavior:
         if not cls.category in Behavior.component_category_registry.keys():
             Behavior.component_category_registry[cls.category] = []
         Behavior.component_category_registry[cls.category].append(cls)
-        Behavior.component_instances[cls] = set()
+        Behavior.behavior_instances[cls] = set()
     
     @classmethod
     def from_inst(cls, inst: Behavior):
@@ -225,7 +225,7 @@ class Behavior:
         self.__gameobject: object = gameobject
         self.__enabled = True
 
-        self.component_instances[type(self)].add(gameobject)
+        self.behavior_instances[type(self)].add(gameobject)
     
     init_method: InitMethod = None
     init_vars = []
@@ -297,9 +297,9 @@ class Behavior:
         """
         pass
 
-    @staticmethod
-    def get_objects_with_component(component: type[Behavior]) -> set[object]:
-        return Behavior.component_instances[component]
+    @final
+    def destroy(self):
+        Behavior.behavior_instances[type(self)].remove(self.__gameobject)
 
 class EditorField:
     def __init__(self, field_type: type, default=None):

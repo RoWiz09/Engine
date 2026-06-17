@@ -16,11 +16,8 @@ out vec4 FragColor;
 
 struct PointLight {
     vec4 position;
-    vec4 ambient;
-    vec4 diffuse;
-    vec4 specular;
     vec4 color;
-    vec4 attenuation;
+    float range;
 };
 
 layout(std140) uniform PointLightBlock {
@@ -49,16 +46,18 @@ uniform int uNumSpotLights;
 vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
 {
     float intensity = light.position.w;
-    float distance_ = length(light.position.xyz - fragPos) / light.attenuation.w;
+    float distance_ = length(light.position.xyz - fragPos) / light.range;
     float rangeFade = 1.0 - clamp(distance_, 0.0, 1.0);
 
-    float facing = dot(normal, light.position.xyz);
+    float facing = dot(normalize(normal), light.position.xyz - fragPos);
     facing = clamp(
         facing, 0.0, 1.0
     );
 
+    float attenuation = pow(rangeFade, 3.0);
+
     vec3 color = light.color.rgb / vec3(255.0) * intensity;
-    return (color * rangeFade) * facing;
+    return (color * attenuation) * facing;
 }
 
 vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir)

@@ -1,8 +1,10 @@
 from typing_extensions import overload
+from pathlib import Path
 
 import os
 
 class Settings:
+    base = Path("data")
     @overload
     def __init__(self): ...
     @overload
@@ -10,12 +12,7 @@ class Settings:
 
     def __init__(self, file_name:str="settings.rconfig"):
         self._file_name = file_name
-
-        if not os.path.isfile(os.path.join("assets", file_name)):
-            os.makedirs("assets", exist_ok=True)
-            open(os.path.join("assets", file_name), "x").close()
-
-        config_file = open(os.path.join("assets", file_name), "r")
+        config_file = open(Settings.base / file_name, "r")
 
         self.settings = {}
 
@@ -73,7 +70,7 @@ class Settings:
         return True
 
     def save_config(self):
-        config_file = open(os.path.join("assets", self._file_name), "w")
+        config_file = open(Settings.base / self._file_name, "w")
 
         settings_str = ""
         for key, value in self.settings.items():

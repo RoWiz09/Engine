@@ -33,6 +33,10 @@ class MenuBar(UiElement):
             super().draw(editor, pos)
             self.text.draw(editor, pos)
 
+        def handle_input(self, keycodes, mouse_buttons, input_handler):
+            if input_handler.get_mouse_button_up(mouse_buttons.LEFT):
+                open_popup(self.rect.bottomleft).register()
+
     def __init__(self, parent, **kwrds):
         super().__init__(parent, 100, 20, **kwrds)
 
@@ -62,6 +66,7 @@ class MenuBar(UiElement):
             menu.draw(editor, pos)
 
     def handle_input(self, keycodes, mouse_buttons, input_handler):
+        print("WOW!")
         for elem in self.menus.values():
             if elem.rect.collide_point(glm.vec2(input_handler.mouse_pos)):
                 elem.handle_input(keycodes, mouse_buttons, input_handler)
@@ -216,9 +221,35 @@ class ListView(UiElement):
             return self.focused_elem.value
 
         return None
-    
+
 @dataclass
 class ListValue:
     val: Any
     index: int
+
+class LabeledCheckbox(UiElement):
+    can_claim_focus = True
+
+    def __init__(self, parent, width, height, label: str, state: bool = False, **kwrds):
+        super().__init__(parent, width, height)
+
+        self.label = TextElement(None, label.replace("_", " ").title(), width, height).set_anchor("lm", TextRenderAnchor.middle_left)
+        self.label.old = True
+        self.checkbox = Checkbox(None, state)
+
+    def resize(self, size):
+        super().resize(size)
+
+        self.label.resize(size)
+
+    def draw(self, editor, pos):
+        if self.rect.pos != pos:
+            self.rect.move_to(glm.vec2(*pos))
+            
+        self.label.draw(editor, pos)
+        self.checkbox.draw(editor, glm.vec2(self.label.rect.right - self.checkbox.size.x, self.label.rect.top))    
+        
+    def handle_input(self, keycodes, mouse_buttons, input_handler):
+        if self.checkbox.rect.collide_point(glm.vec2(input_handler.mouse_pos)):
+            self.checkbox.handle_input(keycodes, mouse_buttons, input_handler)
         

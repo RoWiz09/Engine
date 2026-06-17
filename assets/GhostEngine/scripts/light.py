@@ -11,10 +11,6 @@ class Pointlight(Behavior, LightType):
 
     range = EditorField(float, 1)
 
-    constant = EditorField(float, 1.0)
-    linear = EditorField(float, 0.09)
-    quadratic = EditorField(float, 0.032)
-
     def __init__(self, gameobject):
         super().__init__(gameobject)
 

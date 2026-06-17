@@ -183,15 +183,8 @@ class ShaderProgram:
                  light.gameobject.transform.pos.z,
                  light.intensity),
 
-                (*light.ambient, 0.0),
-                (*light.diffuse, 0.0),
-                (*light.specular, 0.0),
                 (*light.color, 0.0),
-
-                (light.constant,
-                 light.linear,
-                 light.quadratic,
-                 light.range)
+                light.range
             )
 
             glBufferSubData(

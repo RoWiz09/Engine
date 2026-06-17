@@ -11,10 +11,12 @@ from systems.window_drawer import WindowDrawer
 from systems.window_docker import *
 from systems.editor_windows import *
 
-from systems.build import build_game
+from systems.discord_rich_presence import DiscordRichPresence
 
+from systems.build import build_game
 from systems import global_vars
 
+import importlib
 import json
 
 glfw_initalized = False
@@ -47,8 +49,6 @@ class Window:
         if not glfw_initalized:
             glfw.init()
 
-        
-        ConsoleLogger().can_write_to_console = global_vars.ARGS.enable_console
         self.logger = Logger("EDITOR")
 
         # Set the global_vars.editor_window variable, for easy, global access of this instance.
@@ -58,12 +58,16 @@ class Window:
         glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
         glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
 
+        glfw.window_hint(glfw.SAMPLES, 4)
+
         self.window = glfw.create_window(width, height, "GhostEngine Editor", None, None)
         glfw.make_context_current(self.window)
 
         self.logger.log_debug("GLFW initalized successfully!")
 
         gl.glEnable(gl.GL_CULL_FACE)
+        gl.glEnable(gl.GL_MULTISAMPLE)
+
         gl.glEnable(gl.GL_BLEND)
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
         
@@ -80,7 +84,6 @@ class Window:
         with open(".rproj") as project_file:
             self.project_data = json.load(project_file)
         os.environ["project"] = self.project_data["name"]
-        build_game()
 
         glfw.set_window_title(self.window, "GhostEngine Editor - " + self.project_data["name"])
 
@@ -133,15 +136,19 @@ class Window:
 
         self.last_time = glfw.get_time()
 
+        self.discord_rpc = DiscordRichPresence("1510115212055937075")
+        self.discord_rpc.connect()
+        self.discord_rpc.start_handling_activity()
+
     def setup_root_menu_bar(self):
-        self.drawer.top_bar.add_menu("AAA")
+        self.drawer.top_bar.add_menu("File")
 
     def should_close(self):
         return glfw.window_should_close(self.window)
     
     def setup_pack(self):
-        def pack_init(self: global_vars.Pack):
-            self.files_ = []
+        def pack_init(inst: global_vars.Pack):
+            inst.files_ = []
 
             assets = Path("assets")
             for dirpath, _, filenames in os.walk(assets):
@@ -150,30 +157,35 @@ class Window:
                     continue
 
                 for file in filenames:
-                    self.files_.append(dirpath / file)
+                    inst.files_.append(dirpath / file)
 
         get_decorator = getattr(global_vars.pack, "_Pack__get_decorator")
         @get_decorator
-        def pack_get_contents(self: global_vars.Pack, path: global_vars.PathLike):
+        def pack_get_contents(inst: global_vars.Pack, path: global_vars.PathLike):
             return path.read_text()
         
         @get_decorator
-        def pack_get_raw(self: global_vars.Pack, path: global_vars.PathLike):
+        def pack_get_raw(inst: global_vars.Pack, path: global_vars.PathLike):
             return path.read_text().encode()
         
         @get_decorator
-        def pack_read_json(self: global_vars.Pack, path: global_vars.PathLike):
+        def pack_read_json(inst: global_vars.Pack, path: global_vars.PathLike):
             return json.loads(path.read_text())
         
         @property
-        def pack_files(self: global_vars.Pack):
-            return self.files_
+        def pack_files(inst: global_vars.Pack):
+            return inst.files_
+        
+        def pack_load_behavior(inst: global_vars.Pack, module: str, behavior_class: str):
+            module_ = importlib.import_module(module)
+            return getattr(module_, behavior_class)
         
         setattr(global_vars.pack, "__init__", pack_init)
         setattr(global_vars.pack, "get_contents", pack_get_contents)
         setattr(global_vars.pack, "get_raw", pack_get_raw)
         setattr(global_vars.pack, "read_json", pack_read_json)
         setattr(global_vars.pack, "files", pack_files)
+        setattr(global_vars.pack, "load_behavior", pack_load_behavior)
 
     def setup_async_loading(self):
         def load_scene_index_async(self: global_vars.SceneManager, scene_index: int, alert_scripts: bool = True):
@@ -193,9 +205,11 @@ class Window:
         setattr(global_vars.scene_manager, "load_scene_index_async", load_scene_index_async)
         setattr(global_vars.scene_manager, "load_scene_async", load_scene_async)
 
-    def render_scene(self, frame_buffer = None):
-        frame_buffer = frame_buffer if frame_buffer else self.scene_framebuffer
-        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, frame_buffer)
+    def render_scene(self, multisample_frame_buffer):
+        if not multisample_frame_buffer:
+            Logger("RENDERER").log_fatal("Tried to render the scene without passing a multisample frame buffer!")
+
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, multisample_frame_buffer)
         gl.glEnable(gl.GL_DEPTH_TEST)
 
         gl.glClearColor(0.25, 0.25, 1, 1)
@@ -207,8 +221,11 @@ class Window:
             self.editor_cam.get_view_pos()
         )
 
-        if frame_buffer != 0:
-            gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
+        gl.glBindFramebuffer(gl.GL_READ_FRAMEBUFFER, multisample_frame_buffer)
+        gl.glBindFramebuffer(gl.GL_DRAW_FRAMEBUFFER, self.scene_framebuffer)
+        gl.glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, gl.GL_COLOR_BUFFER_BIT, gl.GL_NEAREST)
+
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
         gl.glDisable(gl.GL_DEPTH_TEST)
 
     def update(self):

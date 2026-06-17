@@ -11,24 +11,26 @@ import sys
 from typing import TypeVar
 T = TypeVar("T")
 
-class Object:
+class GameObject:
     @overload
-    def __init__(self, name, material:Material): ...
+    def __init__(self, name: str, material:Material): ...
 
     @overload
-    def __init__(self, name, material:Material, transform: Transform): ...
+    def __init__(self, name: str, material:Material, transform: Transform): ...
 
     @overload
-    def __init__(self, name, material:Material, transform: Transform, *components): ...
+    def __init__(self, name: str, material:Material, transform: Transform, *behaviors): ...
 
-    def __init__(self, name, material:Material, transform: Transform = Transform(), *components):
+    def __init__(self, name: str, material:Material, transform: Transform = Transform(), *behaviors, tag: str = ""):
         self.name = name
+        self.tag = ""
+
         self.mat = material
-        self.components : list[Behavior] = []
+        self.behaviors : list[Behavior] = []
 
         transform.gameobject = self
 
-        self.children: list[Object] = []
+        self.children: list[GameObject] = []
 
         if transform.parent:
             transform.parent.gameobject.children.append(self)
@@ -36,25 +38,25 @@ class Object:
         self.__transform = transform
         self.__enabled = True
 
-        self.__render_components: list[RenderBehavior] = []
+        self.__render_behaviors: list[RenderBehavior] = []
 
-        for comp in components:
+        for comp in behaviors:
             if issubclass(type(comp), Behavior):
-                self.components.append(comp)
+                self.behaviors.append(comp)
             
             else:
                 Logger("CORE").log_error(f"Object of type {type(comp).__name__} is not a Behavior.")
 
     # Rendering
     def pre_render(self):
-        list(map(lambda s: s.pre_render(), self.__render_components))
+        list(map(lambda s: s.pre_render(), self.__render_behaviors))
 
     def render(self):
         self.mat.use()
-        list(map(lambda s: s.on_render(), self.__render_components))
+        list(map(lambda s: s.on_render(), self.__render_behaviors))
 
     def post_render(self):
-        list(map(lambda s: s.post_render(), self.__render_components))
+        list(map(lambda s: s.post_render(), self.__render_behaviors))
 
     def set_material(self, mat:Material):
         self.mat = mat
@@ -63,50 +65,50 @@ class Object:
     # Updates
     def update(self, dt):
         if self.enabled:
-            for component in self.components:
-                if not component.enabled:
+            for behavior in self.behaviors:
+                if not behavior.enabled:
                     continue
 
-                component.update(dt)
+                behavior.update(dt)
 
     def fixed_update(self):
-        for component in self.components:
-            if component.enabled:
-                component.fixed_update()
+        for behavior in self.behaviors:
+            if behavior.enabled:
+                behavior.fixed_update()
 
-    # Components
-    def get_component(self, component_class: type[T]) -> T:
-        for component in self.components:
-            if isinstance(component, component_class) and component.enabled:
-                return component
+    # behaviors
+    def get_behavior(self, behavior_class: type[T]) -> T:
+        for behavior in self.behaviors:
+            if isinstance(behavior, behavior_class) and behavior.enabled:
+                return behavior
             
-    def get_components(self, component_class: type[T]) -> list[T]:
+    def get_behaviors(self, behavior_class: type[T]) -> list[T]:
         out = []
-        for component in self.components:
-            if isinstance(component, component_class) and component.enabled:
-                out.append(component)
+        for behavior in self.behaviors:
+            if isinstance(behavior, behavior_class) and behavior.enabled:
+                out.append(behavior)
 
         return out
 
-    def add_components(self, *components):
-        for component in components:
-            if issubclass(type(component), Behavior):
-                component._gameobject = self
-                self.components.append(component)
+    def add_behaviors(self, *behaviors):
+        for behavior in behaviors:
+            if issubclass(type(behavior), Behavior):
+                behavior._gameobject = self
+                self.behaviors.append(behavior)
 
-                if issubclass(type(component), RenderBehavior):
-                    self.__render_components.append(component)
+                if issubclass(type(behavior), RenderBehavior):
+                    self.__render_behaviors.append(behavior)
 
             else:
-                Logger("CORE").log_error(f"Object of type {type(component).__name__} is not a Behavior.")
+                Logger("CORE").log_error(f"Object of type {type(behavior).__name__} is not a Behavior.")
 
-    def add_component(self, component):
-        if issubclass(type(component), Behavior):
-            component._gameobject = self
-            self.components.append(component)
+    def add_behavior(self, behavior):
+        if issubclass(type(behavior), Behavior):
+            behavior._gameobject = self
+            self.behaviors.append(behavior)
 
-            if issubclass(type(component), RenderBehavior):
-                self.__render_components.append(component)
+            if issubclass(type(behavior), RenderBehavior):
+                self.__render_behaviors.append(behavior)
 
     # Properties
     @property
@@ -151,20 +153,36 @@ class Object:
                 
         return out
     
-    def get_child_with_component(self, component_class: T) -> Object:
+    def get_child_with_behavior(self, behavior_class: T) -> GameObject:
         for child in self.children:
-            for component in child.components:
-                if isinstance(component, component_class):
+            for behavior in child.behaviors:
+                if isinstance(behavior, behavior_class):
                     return child
                 
-    def get_children_with_component(self, component_class: T) -> list[Object]:
-        def has_component(obj):
+    def get_children_with_behavior(self, behavior_class: T) -> list[GameObject]:
+        def has_behavior(obj):
             for comp in obj:
-                if isinstance(comp, component_class):
+                if isinstance(comp, behavior_class):
                     return obj
         
         objects = set()
         for obj in self.children:
-            if has_component(obj):
+            if has_behavior(obj):
                 objects.add(obj)
     
+    def destroy(self):
+        for script in self.behaviors:
+            script.destroy()
+
+
+    # Class Methods
+    @classmethod
+    def find_with_behavior(cls, behavior_type) -> set[GameObject]:
+        """
+        Returns all gameobject instances which has `behavior_type` in its `behaviors` list.
+        """
+        if not issubclass(behavior_type, Behavior):
+            Logger("GAMEOBJECT").log_error("behavior_type argument of GameObject.find_with_behavior() is not of subclass Behavior!")
+            return set()
+
+        return Behavior.behavior_instances[behavior_type]

@@ -115,10 +115,14 @@ class WindowDrawer:
                 self.focused_window.focus()
 
     def handle_input(self, key_codes: type[KeyCodes], mouse_buttons: type[MouseButtons], input_handler: Input):
-        if self.focused_window:
+        mouse_pos = glm.vec2(input_handler.mouse_pos)
+        if self.top_bar.rect.collide_point(mouse_pos):
+            self.top_bar.handle_input(key_codes, mouse_buttons, input_handler)
+
+        elif self.focused_window:
             self.focused_window.handle_input(key_codes, mouse_buttons, input_handler)
 
-            if not self.focused_window.rect.collide_point(glm.vec2(input_handler.mouse_pos)):
+            if not self.focused_window.rect.collide_point(mouse_pos):
                 self.focused_window.lose_focus()
                 self.focused_window = None
 
@@ -310,7 +314,6 @@ class EditorUiWindow:
         if self.default_max_scroll:
             self.scroll = self.max_scroll
     
-    @final
     @final
     def regen_stencil(self):
         self.stencil_model = glm.mat4(1)
@@ -532,6 +535,8 @@ class UiElement:
 
 
         self.sprite = self.build_sprite()
+        self.texture_type = kwrds.pop("tex_type", gl.GL_TEXTURE_2D)
+        self.rebuild_texture_on_resize = kwrds.pop("tex_resize", True)
         if kwrds.pop("build_texture", True):
             self.texture = gl.glGenTextures(1)
             gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture)
@@ -568,7 +573,8 @@ class UiElement:
         self.rect.resize(self.size)
         
         self.sprite = self.build_sprite()
-        self.rebuild_texture()
+        if self.rebuild_texture_on_resize:
+            self.rebuild_texture()
 
         if self.resize_callback:
             self.resize_callback(self)
@@ -583,7 +589,8 @@ class UiElement:
         self.rect.resize(size)
 
         self.sprite = self.build_sprite()
-        self.rebuild_texture()
+        if self.rebuild_texture_on_resize:
+            self.rebuild_texture()
 
         if self.resize_callback:
             self.resize_callback(self)
@@ -599,7 +606,7 @@ class UiElement:
 
         if self.pre_render_hook:
             self.pre_render_hook(self)
-        gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture)
+        gl.glBindTexture(self.texture_type, self.texture)
 
         model = glm.mat4(1)
         model = glm.translate(model, glm.vec3(*(pos + self.pos_offset), 0))
@@ -612,7 +619,7 @@ class UiElement:
         gl.glDrawElements(gl.GL_TRIANGLES, 6, gl.GL_UNSIGNED_INT, None)
         gl.glBindVertexArray(0)
 
-        gl.glBindTexture(gl.GL_TEXTURE_2D, 0)
+        gl.glBindTexture(self.texture_type, 0)
 
         if self.post_render_hook:
             self.post_render_hook(self)
@@ -790,8 +797,8 @@ class Popup(EditorUiWindow):
         self.subpopup.parent = self
         return self.subpopup
 
-    def handle_input(self, key_codes, mouse_buttons, input_handler):
-        super().handle_input(key_codes, mouse_buttons, input_handler)
+    def set_children(self, children: list[UiElement]):
+        self.ui_elements = children
 
 def open_popup(source: glm.vec2):
     popup = Popup(source)

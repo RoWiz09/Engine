@@ -9,7 +9,7 @@ from ghost_engine.datatypes.model_type import Model
 from ghost_engine.scripting.behavior import Behavior, EditorField, InitMethod, PhysicsBehavior
 from ghost_engine.scripting.collider_type import ColliderType, CollisionInfo
 
-from ghost_engine.object import Object
+from ghost_engine.object import GameObject
 
 from ghost_engine.math import triple_product
 
@@ -55,7 +55,7 @@ class MeshCollider(Behavior, ColliderType):
         ) and self.mesh_verts != []
 
     @InitMethod
-    def create_mesh_collider(cls: type[MeshCollider], file_path: str, game_object: Object):
+    def create_mesh_collider(cls: type[MeshCollider], file_path: str, game_object: GameObject):
         inst = cls(game_object)
         inst.load(file_path)
 
@@ -225,8 +225,8 @@ class MeshCollider(Behavior, ColliderType):
         return v
     
     def update(self, dt):
-        for obj in self.get_objects_with_component(MeshCollider):
-            colliders = obj.get_components(MeshCollider)
+        for obj in GameObject.find_with_behavior(MeshCollider):
+            colliders = obj.get_behaviors(MeshCollider)
             for collider in colliders:
                 if collider == self:
                     continue
@@ -362,7 +362,7 @@ class MeshCollider(Behavior, ColliderType):
         
         info = CollisionInfo(self, other.gameobject, other, self.last_simplex)
         for behavior in filter(lambda c: issubclass(type(c), PhysicsBehavior),
-                               self.gameobject.components):
+                               self.gameobject.behaviors):
             
             behavior: PhysicsBehavior
             if this_frame and not last_frame:

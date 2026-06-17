@@ -13,7 +13,7 @@ from .console import ConsoleLogger
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from ghost_engine.object import Object
+    from ghost_engine.object import GameObject
 
 import sys, math
 import asyncio
@@ -30,25 +30,37 @@ class SceneView(EditorUiWindow):
     name = "Scene"
     def __init__(self):
         super().__init__()
-        self.view = UiElement(self, 0, 0)
+        self.view = UiElement(self, 0, 0, build_texture=False, tex_type=gl.GL_TEXTURE_2D_MULTISAMPLE, tex_resize=False)
+
+        self.view.texture = gl.glGenTextures(1)
+        self.view.texture_old = False
+
+        self.fbo = gl.glGenFramebuffers(1)
+        gl.glBindTexture(gl.GL_TEXTURE_2D_MULTISAMPLE, self.view.texture)
+        gl.glTexImage2DMultisample(gl.GL_TEXTURE_2D_MULTISAMPLE, 4, gl.GL_RGB, math.ceil(self.view.size.x), math.ceil(self.view.size.y), gl.GL_TRUE)
+        gl.glBindTexture(gl.GL_TEXTURE_2D_MULTISAMPLE, 0)
         self.view.resize_callback = self.view_resize_callback
 
-        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, global_vars.editor_window.scene_framebuffer)
-        gl.glFramebufferTexture2D(gl.GL_READ_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0, gl.GL_TEXTURE_2D, self.view.texture, 0)
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.fbo)
+        gl.glFramebufferTexture2D(gl.GL_READ_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0, gl.GL_TEXTURE_2D_MULTISAMPLE, self.view.texture, 0)
 
         self.rbo = gl.glGenRenderbuffers(1)
         gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, self.rbo)
-        gl.glRenderbufferStorage(gl.GL_RENDERBUFFER, gl.GL_DEPTH_COMPONENT24, math.ceil(self.view.size.x), math.ceil(self.view.size.y))
+        gl.glRenderbufferStorageMultisample(gl.GL_RENDERBUFFER, 4, gl.GL_DEPTH24_STENCIL8, math.ceil(self.view.size.x), math.ceil(self.view.size.y))
         gl.glFramebufferRenderbuffer(gl.GL_FRAMEBUFFER, gl.GL_DEPTH_ATTACHMENT, gl.GL_RENDERBUFFER, self.rbo)
         gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, 0)
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
 
     def view_resize_callback(self, view: UiElement):
-        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, global_vars.editor_window.scene_framebuffer)
-        gl.glFramebufferTexture2D(gl.GL_READ_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0, gl.GL_TEXTURE_2D, self.view.texture, 0)
+        gl.glBindTexture(gl.GL_TEXTURE_2D_MULTISAMPLE, self.view.texture)
+        gl.glTexImage2DMultisample(gl.GL_TEXTURE_2D_MULTISAMPLE, 4, gl.GL_RGB, math.ceil(self.view.size.x), math.ceil(self.view.size.y), gl.GL_TRUE)
+        gl.glBindTexture(gl.GL_TEXTURE_2D_MULTISAMPLE, 0)
+
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.fbo)
+        gl.glFramebufferTexture2D(gl.GL_READ_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0, gl.GL_TEXTURE_2D_MULTISAMPLE, self.view.texture, 0)
 
         gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, self.rbo)
-        gl.glRenderbufferStorage(gl.GL_RENDERBUFFER, gl.GL_DEPTH_COMPONENT24, math.ceil(self.view.size.x), math.ceil(self.view.size.y))
+        gl.glRenderbufferStorageMultisample(gl.GL_RENDERBUFFER, 4, gl.GL_DEPTH24_STENCIL8, math.ceil(self.view.size.x), math.ceil(self.view.size.y))
         gl.glFramebufferRenderbuffer(gl.GL_FRAMEBUFFER, gl.GL_DEPTH_ATTACHMENT, gl.GL_RENDERBUFFER, self.rbo)
         gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, 0)
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
@@ -99,8 +111,8 @@ class Inspector(EditorUiWindow):
     
     async def build_for_object(self, data):
         if TYPE_CHECKING:
-            assert isinstance(self.object_type, type[Object])
-            assert isinstance(data, Object)
+            assert isinstance(self.object_type, type[GameObject])
+            assert isinstance(data, GameObject)
 
         def set_name(name_in: InputField):
             data.name = name_in.get_value()
@@ -117,7 +129,7 @@ class Inspector(EditorUiWindow):
         TextElement(self, "Transform", self.renderable_width, 12).set_text_size(12).set_anchor("lm", TextRenderAnchor.middle_left)
         parentField = DropField(self, self.renderable_width, 30, "Parent Object", DragData(
             data.transform.parent.gameobject, data.transform.parent.gameobject.name) if data.transform.parent else None)
-        def get_children(obj: Object):
+        def get_children(obj: GameObject):
             children = set()
             for child in obj.children:
                 children.add(child)
@@ -146,7 +158,9 @@ class Inspector(EditorUiWindow):
         build_vec3_input(self, data.transform.localrot, "Rotation")
         build_vec3_input(self, data.transform.scale, "Size")
 
-        for component in data.components:
+        HorizontalLine(self)
+
+        for component in data.behaviors:
             comp_class = type(component)
             TextElement(self, comp_class.__name__, self.renderable_width, 30)
 
@@ -165,13 +179,9 @@ class Inspector(EditorUiWindow):
                         InputField(self, self.renderable_width, 20, var_name, var, str)
                     
                     elif var_data.type == bool:
-                        HorizontalLayout(
-                            self, 
-                            self.renderable_width, 30, 
-                            [
-                                TextElement(self, var_name, 100, 20), 
-                                Checkbox(self, var)
-                        ])
+                        LabeledCheckbox(self, self.renderable_width, 20, var_name, var)
+        
+            HorizontalLine(self)
 
     async def build(self, data):
         self.scroll = 0.0
@@ -187,7 +197,7 @@ class Inspector(EditorUiWindow):
     @classmethod
     def set_data(cls, data):
         if not cls.object_type:
-            cls.object_type = getattr(sys.modules["ghost_engine.object"], "Object")
+            cls.object_type = getattr(sys.modules["ghost_engine.object"], "GameObject")
 
         for inst in cls.instances:
             inst: Inspector
@@ -217,9 +227,9 @@ class Hierarchy(EditorUiWindow):
 
     def create_object(self):
         if not self.object_type:
-            self.object_type = getattr(sys.modules["ghost_engine.object"], "Object")
+            self.object_type = getattr(sys.modules["ghost_engine.object"], "GameObject")
         
-        new_obj = self.object_type("New GameObject", self.manager.materials["base_mat"])
+        new_obj = self.object_type("New Gameobject", self.manager.materials["base_mat"])
         self.manager.game_objects.append(new_obj)
         
         self.rebuild_windows()

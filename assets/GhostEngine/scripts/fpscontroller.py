@@ -23,11 +23,11 @@ class FPSController(Behavior):
         Input().set_cursor_visibility(CursorStates.HIDDEN)
 
         if self.can_jump == True:
-            self.rigidbody = self.gameobject.get_component(Rigidbody)
+            self.rigidbody = self.gameobject.get_behavior(Rigidbody)
             if not self.rigidbody:
                 Logger("FPS CONTROLLER").log_error("The FPS controller's gameobject is missing a rigidbody, which is needed for jumping!")
 
-        self.camera = self.gameobject.get_child_with_component(Camera)
+        self.camera = self.gameobject.get_child_with_behavior(Camera)
         if not self.camera:
             Logger("FPS CONTROLLER").log_error("The FPS controller's gameobject is missing a child with a camera!")
 

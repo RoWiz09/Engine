@@ -85,15 +85,15 @@ class CubeCollider(Behavior, ColliderType):
                     in_last_frame = [self, collider] in CubeCollider.collisions_last_frame
 
                     if in_this_frame and not in_last_frame:
-                        for component in self.gameobject.components:
+                        for component in self.gameobject.behaviors:
                             if issubclass(type(component), PhysicsBehavior):
                                 component.on_collision_start(collider.gameobject)
                     elif in_this_frame:
-                        for component in self.gameobject.components:
+                        for component in self.gameobject.behaviors:
                             if issubclass(type(component), PhysicsBehavior):
                                 component.on_collision(collider.gameobject)
                     elif not in_this_frame and in_last_frame:
-                        for component in self.gameobject.components:
+                        for component in self.gameobject.behaviors:
                             if issubclass(type(component), PhysicsBehavior):
                                 component.on_collision_exit(collider.gameobject)
                             
@@ -102,14 +102,14 @@ class CubeCollider(Behavior, ColliderType):
                     in_last_frame = [self, collider] in CubeCollider.triggers_last_frame
 
                     if in_this_frame and not in_last_frame:
-                        for component in self.gameobject.components:
+                        for component in self.gameobject.behaviors:
                             if issubclass(type(component), PhysicsBehavior):
                                 component.on_trigger_start(collider.gameobject)
                     elif in_this_frame and in_last_frame:
-                        for component in self.gameobject.components:
+                        for component in self.gameobject.behaviors:
                             if issubclass(type(component), PhysicsBehavior):
                                 component.on_trigger(collider.gameobject)
                     elif not in_this_frame and in_last_frame:
-                        for component in self.gameobject.components:
+                        for component in self.gameobject.behaviors:
                             if issubclass(type(component), PhysicsBehavior):
                                 component.on_trigger_exit(collider.gameobject)

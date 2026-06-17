@@ -1,10 +1,8 @@
-from typing_extensions import deprecated
-
 from ..rendering.shader_program import ShaderProgram
 from ..rendering.material import Material
 from .transform import Transform
 from .packer import Pack
-from ..object import Object 
+from ..object import GameObject 
 from .input import Input, KeyCodes
 
 from ..scripting.behavior import *
@@ -12,6 +10,7 @@ from ..scripting.behavior import *
 from ..rendering.camera_type import CamType
 from ..rendering.light_type import LightType
 
+from ..decorators import deprecated
 
 from pyglm import glm
 
@@ -20,6 +19,7 @@ from PIL import Image as image
 from .logger import Logger
 
 from dataclasses import dataclass
+from pathlib import Path
 
 import os, json, importlib, glfw, sys
 import numpy as np
@@ -63,7 +63,7 @@ class SceneManager:
         self.scenes, self.shaders = self.load_files()
         self.scenes = dict(sorted(self.scenes.items(), key=get_index))
 
-        self.game_objects: list[Object] = []
+        self.game_objects: list[GameObject] = []
 
         self.last_time = glfw.get_time()
         self.accumulator = 0.0
@@ -152,7 +152,7 @@ class SceneManager:
                             Material(name, shader, img.tobytes() if img else None, img.size if img else None, properties)
                 
 
-    def _instantiate_scene_objects(self, scene_data: dict) -> list[Object]:
+    def _instantiate_scene_objects(self, scene_data: dict) -> list[GameObject]:
         for lights in LightType.lights.values():
             lights.clear()
             
@@ -160,11 +160,10 @@ class SceneManager:
             
         game_objects: list[dict] = scene_data["objects"]
 
-        def instantiate_scripts(obj: Object, scripts: list[dict]):
+        def instantiate_scripts(obj: GameObject, scripts: list[dict]):
             obj_scripts = set()
             for comp_data in scripts:
-                module = importlib.import_module(comp_data["module"])
-                cls = getattr(module, comp_data["class"])
+                cls = self.pack.load_behavior(comp_data["module"], comp_data["class"])                
                 vars_data: dict = comp_data.get("vars", {})
 
                 if issubclass(cls, Behavior):
@@ -189,18 +188,14 @@ class SceneManager:
                         f"Script {cls.__name__} is not a subclass of Behavior and cannot be applied to {obj.name}!"
                     )   
                 
-            obj.add_components(*obj_scripts)
+            obj.add_behaviors(*obj_scripts)
 
-        def instantiate_object(obj_data: dict, parent: Object = None):
+        def instantiate_object(obj_data: dict, parent: GameObject = None):
             object_name = obj_data["name"]
             parent_t = None if parent is None else parent.transform
             object_transform = Transform(glm.vec3(*obj_data["pos"]), glm.vec3(*obj_data["rot"]), glm.vec3(*obj_data["scale"]), parent_t)
-            game_object = Object(object_name, self.materials.get(obj_data["material"], self.materials["base_mat"]), object_transform)
-            scripts = []
-
+            game_object = GameObject(object_name, self.materials.get(obj_data["material"], self.materials["base_mat"]), object_transform)
             instantiate_scripts(game_object, obj_data.get("components", []))
-
-            game_object.add_components(*scripts)
 
             for child in obj_data.get("children", []):
                 instantiate_object(child, game_object)
@@ -226,7 +221,7 @@ class SceneManager:
         scene_info = SceneInfo(scene_name, scene_index)
         if alert_scripts:
             for obj in self.game_objects:
-                for script in obj.components:
+                for script in obj.behaviors:
                     script.on_scene_unload(scene_info)
 
         # Load new scene objects
@@ -238,11 +233,11 @@ class SceneManager:
         # Call load callbacks
         if alert_scripts:
             for obj in self.game_objects:
-                for script in obj.components:
+                for script in obj.behaviors:
                     script.on_scene_load(scene_info)
 
-    @deprecated("")
-    def get_objects_with_component(self, component_class) -> list[Object]:
+    @deprecated(replacement=GameObject.find_with_behavior)
+    def get_objects_with_component(self, component_class) -> list[GameObject]:
         objects = []
         for object in self.game_objects:
             if not object.enabled:
@@ -259,7 +254,7 @@ class SceneManager:
         # find roots first
         roots = [obj for obj in self.game_objects if obj.transform.parent is None]
 
-        def build(node: Object):
+        def build(node: GameObject):
             children = {}
             for obj in node.children:
                 children[obj] = build(obj)
@@ -330,7 +325,7 @@ class SceneManager:
     def save(self):        
         scene_path = self.scenes[self.cur_scene]
 
-        hierarchy: dict[Object, dict] = self.get_hierarchy()[None]
+        hierarchy: dict[GameObject, dict] = self.get_hierarchy()[None]
 
         cur_tree = []
         
@@ -343,7 +338,7 @@ class SceneManager:
                 return list(field)
 
         # Turn an object into a JSON dictionary
-        def serialize_object(obj: Object, children: dict[Object, dict]):
+        def serialize_object(obj: GameObject, children: dict[GameObject, dict]):
             base = {
                 "name": obj.name,
 
@@ -361,7 +356,7 @@ class SceneManager:
             material = list(self.materials.keys())[mat_idx]
             base["material"] = material
 
-            for component in obj.components:
+            for component in obj.behaviors:
                 if component.init_method is None:
                     base["components"].append({
                         "module": type(component).__module__,

@@ -1,6 +1,26 @@
+# Import everything for compilation
+from .core.scene_manager import *
 from .core.logger import *
-from .core.scene_manager import SceneManager
+from .core.packer import *
 from .core.input import *
+from .core.settings import *
+from .core.window import *
+
+from .datatypes.engine_data_type import *
+from .datatypes.model_type import *
+
+from .rendering.shader_program import *
+from .rendering.camera_type import *
+from .rendering.light_type import *
+from .rendering.material import *
+
+from .scripting.collider_type import *
+from .scripting.behavior import *
+
+from .error_codes import *
+from .decorators import *
+from .object import *
+from .math import *
 
 def init():
     from .core.logger import setup
@@ -9,27 +29,3 @@ def init():
 def init_window(window_width = 800, window_height = 600, window_name = "Test"):
     from .core.window import Window
     return Window(window_width, window_height, window_name)
-
-def get_logger(logger_name:str):
-    """
-        Returns the requested logger. Creates a new one if needed.
-    """
-    from .core.logger import Logger
-    return Logger(logger_name)
-
-def set_logging_level(logging_level: LoggingLevels):
-    """
-    Sets the level loggers should log at.
-    
-    :param logging_level: Logging level
-    :type logging_level: LoggingLevels
-    """
-    from .core import logger
-    logger.configure_loggers(log_level = logging_level)
-
-def get_settings():
-    """
-        Returns a new instance of a settings object.
-    """
-    from .core.settings import Settings
-    return Settings()

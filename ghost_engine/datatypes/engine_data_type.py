@@ -29,3 +29,8 @@ class DataType:
             Should return a tuple, holding the DisplayMethod and the data to display.
         """
         pass
+
+    def filter_input(self, value) -> bool:
+        """
+            Filters what can be put into the field. Return True to allow input, False to deny.
+        """

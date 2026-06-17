@@ -3,8 +3,9 @@ from ghost_engine.core.logger import Logger
 
 from ghost_engine.core.packer import Pack
 
-from ghost_engine.object import Object
+from ghost_engine.object import GameObject
 from ghost_engine.rendering.material import Material
+
 from OpenGL import GL
 import numpy as np
 import hashlib
@@ -18,7 +19,6 @@ class Mesh(Behavior, RenderBehavior):
     _mesh_registry = {}
 
     mesh_path = EditorField(str, "")
-    mesh_name = EditorField(str, "")
 
     run_in_editor = True
 
@@ -28,7 +28,7 @@ class Mesh(Behavior, RenderBehavior):
         self.submeshes: list[Submesh] = []
 
     @InitMethod
-    def create_from_obj(cls, file_path: str, file_name: str, game_object: Object):
+    def create_from_obj(cls, file_path: str, game_object: GameObject):
         submeshes = []
         cur_mesh = None
 
@@ -46,12 +46,8 @@ class Mesh(Behavior, RenderBehavior):
         tex_offset = 0
 
         lines = []
-        if not "compiled" in os.environ.keys():
-            with open(os.path.join(*file_path.split("."), file_name)) as file:
-                lines = file.readlines()
-        else:
-            pack = Pack()
-            lines = pack.get_string(os.path.join(*file_path.split("."), file_name)).splitlines()
+        pack = Pack()
+        lines = pack.get_contents(file_path).splitlines()
 
         for line in lines:
             if line.startswith("o "):
@@ -131,8 +127,6 @@ class Mesh(Behavior, RenderBehavior):
 
         mesh = cls(game_object)
         mesh.submeshes = submeshes
-
-        mesh.mesh_name = file_name
         mesh.mesh_path = file_path
 
         return mesh

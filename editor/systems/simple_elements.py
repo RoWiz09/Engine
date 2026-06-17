@@ -514,12 +514,10 @@ class HorizontalLayout(UiElement):
         self.padding = glm.vec2(10, 10)
 
         self.elems = elems
-        for elem in elems:
-            if elem.max_size
+        height_ = height - self.padding.y * 2
 
         for elem in elems:
             width_ = ((width - self.padding.x * 2) - (self.padding.x * (len(elems) - 1))) / len(elems) 
-            height_ = height - self.padding.y * 2
             elem.resize(glm.vec2(width_, height_))
             elem.parent = self
 
