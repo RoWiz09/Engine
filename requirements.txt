@@ -6,4 +6,4 @@ pyglm
 colorama
 pyinstaller
 pillow
-astor
+cryptography

@@ -610,16 +610,20 @@ class HorizontalLayout(UiElement):
 
 class HorizontalLine(UiElement):
     def __init__(self, parent: EditorUiWindow, **kwargs):
-        width = parent.get_draw_data().size.x - parent.get_draw_data().padding.x * 2
-        height = 30
+        if 'width' in kwargs:
+            width = kwargs.pop('width')
+
+        else:
+            width = parent.get_draw_data().size.x - parent.get_draw_data().padding.x * 2
+        height = 10
 
         super().__init__(parent, width, height, **kwargs)
 
     def build_sprite(self):
         img = Image.new("RGBA", (int(self.rect.size.x), int(self.rect.size.y)), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img, "RGBA")
-        draw.line((0, 14, int(self.size.x), 14), (66, 69, 71), width=2)
-        draw.line((0, 16, int(self.size.x), 16), (59, 63, 68), width=2)
+        draw.line((0, 4, int(self.size.x), 4), (66, 69, 71), width=2)
+        draw.line((0, 6, int(self.size.x), 6), (59, 63, 68), width=2)
         return img
 
 class Tab(UiElement):

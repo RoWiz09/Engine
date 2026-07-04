@@ -2,7 +2,8 @@
     "name":"testproj",
     "dlc":{
         "dlc0": {
-            "root": "testproj"
+            "root": "testproj",
+            "exclude": []
         }
     }
 }

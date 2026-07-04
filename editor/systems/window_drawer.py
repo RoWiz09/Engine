@@ -798,7 +798,11 @@ class Popup(EditorUiWindow):
         return self.subpopup
 
     def set_children(self, children: list[UiElement]):
+        for elem in children:
+            elem.parent = self
+
         self.ui_elements = children
+        return self
 
 def open_popup(source: glm.vec2):
     popup = Popup(source)

@@ -1,7 +1,5 @@
 #version 330 core
 
-#define MAX_LIGHTS 64
-
 uniform vec3 uViewPos;
 uniform sampler2D uTexture;
 uniform vec2 uTileData;
@@ -21,24 +19,20 @@ struct PointLight {
 };
 
 layout(std140) uniform PointLightBlock {
-    PointLight pointLights[MAX_LIGHTS];
+    PointLight pointLights[64];
 };
 
 uniform int uNumPointLights;
 
 struct SpotLight {
-    vec4 position;
+    vec4 position; // w: intensity
     vec4 direction;
-    vec4 angles;
     vec4 color;
-    vec4 ambient;
-    vec4 diffuse;
-    vec4 specular;
-    vec4 attenuation;
+    vec3 config; // x: outer angle, y: inner angle, z: range
 };
 
 layout(std140) uniform SpotLightBlock {
-    SpotLight spotLights[MAX_LIGHTS];
+    SpotLight spotLights[64];
 };
 
 uniform int uNumSpotLights;
@@ -47,64 +41,39 @@ vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
 {
     float intensity = light.position.w;
     float distance_ = length(light.position.xyz - fragPos) / light.range;
-    float rangeFade = 1.0 - clamp(distance_, 0.0, 1.0);
+    float rangeFade = pow(1.0 - clamp(distance_, 0.0, 1.0), 3.0);
 
     float facing = dot(normalize(normal), light.position.xyz - fragPos);
-    facing = clamp(
-        facing, 0.0, 1.0
-    );
-
-    float attenuation = pow(rangeFade, 3.0);
+    facing = clamp(facing, 0.0, 1.0);
 
     vec3 color = light.color.rgb / vec3(255.0) * intensity;
-    return (color * attenuation) * facing;
+    return (color * rangeFade) * facing;
+}
+
+vec3 rotateVectorByQuaternion(vec3 v, vec4 q) {
+    vec3 temp = cross(q.xyz, v) + q.w * v;
+    return v + 2.0 * cross(q.xyz, temp);
 }
 
 vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
 {
-    vec3 L = normalize(light.position.xyz - fragPos);
+    vec3 offset_normal = normalize(light.position.xyz - fragPos);
+    float theta = dot(normalize(-light.direction.xyz), offset_normal);
 
-    float theta = dot(normalize(-light.direction.xyz), L);
-
-    float innerCut = light.angles.x;
-    float outerCut = light.angles.y;
+    float innerCut = light.config.x;
+    float outerCut = light.config.y;
     float epsilon  = innerCut - outerCut;
 
-    float intensity = clamp(
-        (theta - outerCut) / max(epsilon, 0.001),
-        0.0,
-        1.0
-    );
+    float intensity = clamp((theta - outerCut) / max(epsilon, 0.001), 0.0, 1.0) * light.position.w;
 
-    if (intensity <= 0.0)
-        return vec3(0.0);
+    float distance_ = length(light.position.xyz - fragPos) / light.config.z;
+    float rangeFade = pow(1.0 - clamp(distance_, 0.0, 1.0), 3.0);
 
-    float distance_ = length(light.position.xyz - fragPos);
-    float facing = dot(normal, light.position.xyz);
-    facing = clamp(
-        facing, 0.0, 1.0
-    );
+    float facing = dot(normalize(normal), light.position.xyz - fragPos);
+    facing = clamp(facing, 0.0, 1.0);
 
-    float atten = 1.0 / (
-        light.attenuation.x +
-        light.attenuation.y * distance_ +
-        light.attenuation.z * distance_ * distance_
-    );
-
-    float rangeFade = 1.0 - clamp(distance_ / light.attenuation.w, 0.0, 1.0);
-    atten *= rangeFade * rangeFade;
-
-    float diff = max(dot(normal, L), 0.0);
-    vec3 H = normalize(L + viewDir);
-    float spec = pow(max(dot(normal, H), 0.0), 32.0);
-
-    vec3 color = light.color.rgb / vec3(255.0);
-
-    vec3 ambient  = light.ambient.rgb  * color;
-    vec3 diffuse  = light.diffuse.rgb  * diff * color;
-    vec3 specular = light.specular.rgb * spec * color;
-
-    return (ambient + diffuse + specular) * atten * intensity * light.position.w * facing;
+    vec3 color = light.color.rgb / vec3(255.0) * intensity;
+    return (color * rangeFade) * facing;
 }
 
 void main()
@@ -115,13 +84,11 @@ void main()
 
     if (!uDisableLighting) {
         vec3 result = vec3(0.0);
-
-        int pointCount = min(uNumPointLights, MAX_LIGHTS);
-        for (int i = 0; i < pointCount; ++i)
+        
+        for (int i = 0; i < uNumPointLights; ++i)
             result += CalcPointLight(pointLights[i], normal, vWorldPos, viewDir);
 
-        int spotCount = min(uNumSpotLights, MAX_LIGHTS);
-        for (int i = 0; i < spotCount; ++i)
+        for (int i = 0; i < uNumSpotLights; ++i)
             result += CalcSpotLight(spotLights[i], normal, vWorldPos, viewDir);
 
         FragColor = vec4(result * albedo, 1.0);

@@ -23,6 +23,7 @@ class GameObject:
 
     def __init__(self, name: str, material:Material, transform: Transform = Transform(), *behaviors, tag: str = ""):
         self.name = name
+        self.static = False
         self.tag = ""
 
         self.mat = material

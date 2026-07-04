@@ -6,32 +6,69 @@ if TYPE_CHECKING:
 
 from pathlib import Path
 
-import PyInstaller.__main__ as pyinstaller
-from PyInstaller.utils.hooks import collect_dynamic_libs
+from . import global_vars as modules
 
+import subprocess
 import os, struct
 import importlib
+import tempfile
 import inspect
 import hashlib
 import json
 import sys
 
-def build_game(*dynamic_libs):
-    print("Building the game...")
-    print(collect_dynamic_libs('glfw'))
-    (libs:=[]).extend([f"--add-binary={lib[0]}:{lib[1]}" for lib in collect_dynamic_libs('glfw')])
-    for lib_name in dynamic_libs:
-        libs.extend([f"--add-binary={lib[0]}:{lib[1]}" for lib in collect_dynamic_libs(lib_name)])
+def make_module(tmp_path: Path, dlc_path: Path):
+    for dirpath, _, filenames in dlc_path.walk():
+        module_path = None
+        for fn in filenames:
+            if not fn.endswith(".py"):
+                continue
 
-    # Build the executable using PyInstaller
-    pyinstaller.run([
-        os.environ["project"] + ".py",
-        '--onefile',
-        '--windowed',
-        f'--name={os.environ["project"]}',
-        f'--distpath={str("dist" / Path(os.environ["project"]))}',
-        *libs
-    ])
+            filepath = dlc_path / dirpath / fn
+            if module_path is None:
+                module_path = tmp_path / dirpath
+                module_path.mkdir(parents=True, exist_ok=True)
+            module_file_path = module_path / fn
+
+            module_file_path.write_text(filepath.read_text())
+
+def build_game(*dynamic_libs):
+    logger = modules.logger("COMPILATION")
+    logger.log_debug("Building Game...")
+    
+    dlcs = ["GhostEngine"]
+    with open(".rproj") as project_file:
+        project_data = json.load(project_file)
+        dlcs.extend([val['root'] for val in project_data["dlc"].values()])
+    
+    assets_path = Path("assets")
+    def check_for_script(dlc_path: Path):
+        for dirpath, dirnames, filenames in dlc_path.walk():
+            for filename in filenames:
+                if filename.endswith(".py"):
+                    return True
+                
+        return False
+
+    modules_tmpdir = tempfile.TemporaryDirectory()
+    (tmp_path := Path(modules_tmpdir.name) / 'assets').mkdir()
+    for dlc in dlcs:
+        dlc_path = assets_path / dlc
+        
+        if not check_for_script(dlc_path):
+            continue
+        
+        (dlc_tmp_path := tmp_path / dlc).mkdir(parents=True)
+        make_module(dlc_tmp_path, dlc_path)
+
+    build_command = [
+        'py', '-m', 'nuitka',
+        '--deployment', '--standalone', f'--include-package-data={str(tmp_path)}', f'--output-dir={Path('dist') / os.environ['project']}',
+        os.environ['project']+'.py'
+    ]
+    subprocess.run(build_command)
+
+    modules_tmpdir.cleanup()
 
     print("Writing asset packs...")
 
@@ -41,11 +78,6 @@ def build_game(*dynamic_libs):
     print("Game built successfully!")
 
 def write_packs():
-    """
-        Used when building a project made in the engine. \n
-        TODO: Add DLC Packing
-    """
-
     assets_path = Path("assets")
     output_path = "dist" / Path(f"{os.environ["project"]}") / "data"
     output_path.mkdir(parents=True, exist_ok=True)

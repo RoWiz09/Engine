@@ -30,37 +30,25 @@ class SceneView(EditorUiWindow):
     name = "Scene"
     def __init__(self):
         super().__init__()
-        self.view = UiElement(self, 0, 0, build_texture=False, tex_type=gl.GL_TEXTURE_2D_MULTISAMPLE, tex_resize=False)
-
-        self.view.texture = gl.glGenTextures(1)
-        self.view.texture_old = False
-
-        self.fbo = gl.glGenFramebuffers(1)
-        gl.glBindTexture(gl.GL_TEXTURE_2D_MULTISAMPLE, self.view.texture)
-        gl.glTexImage2DMultisample(gl.GL_TEXTURE_2D_MULTISAMPLE, 4, gl.GL_RGB, math.ceil(self.view.size.x), math.ceil(self.view.size.y), gl.GL_TRUE)
-        gl.glBindTexture(gl.GL_TEXTURE_2D_MULTISAMPLE, 0)
+        self.view = UiElement(self, 0, 0)
         self.view.resize_callback = self.view_resize_callback
 
-        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.fbo)
-        gl.glFramebufferTexture2D(gl.GL_READ_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0, gl.GL_TEXTURE_2D_MULTISAMPLE, self.view.texture, 0)
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, global_vars.editor_window.scene_framebuffer)
+        gl.glFramebufferTexture2D(gl.GL_READ_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0, gl.GL_TEXTURE_2D, self.view.texture, 0)
 
         self.rbo = gl.glGenRenderbuffers(1)
         gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, self.rbo)
-        gl.glRenderbufferStorageMultisample(gl.GL_RENDERBUFFER, 4, gl.GL_DEPTH24_STENCIL8, math.ceil(self.view.size.x), math.ceil(self.view.size.y))
+        gl.glRenderbufferStorage(gl.GL_RENDERBUFFER, gl.GL_DEPTH_COMPONENT24, math.ceil(self.view.size.x), math.ceil(self.view.size.y))
         gl.glFramebufferRenderbuffer(gl.GL_FRAMEBUFFER, gl.GL_DEPTH_ATTACHMENT, gl.GL_RENDERBUFFER, self.rbo)
         gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, 0)
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
 
     def view_resize_callback(self, view: UiElement):
-        gl.glBindTexture(gl.GL_TEXTURE_2D_MULTISAMPLE, self.view.texture)
-        gl.glTexImage2DMultisample(gl.GL_TEXTURE_2D_MULTISAMPLE, 4, gl.GL_RGB, math.ceil(self.view.size.x), math.ceil(self.view.size.y), gl.GL_TRUE)
-        gl.glBindTexture(gl.GL_TEXTURE_2D_MULTISAMPLE, 0)
-
-        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.fbo)
-        gl.glFramebufferTexture2D(gl.GL_READ_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0, gl.GL_TEXTURE_2D_MULTISAMPLE, self.view.texture, 0)
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, global_vars.editor_window.scene_framebuffer)
+        gl.glFramebufferTexture2D(gl.GL_READ_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0, gl.GL_TEXTURE_2D, self.view.texture, 0)
 
         gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, self.rbo)
-        gl.glRenderbufferStorageMultisample(gl.GL_RENDERBUFFER, 4, gl.GL_DEPTH24_STENCIL8, math.ceil(self.view.size.x), math.ceil(self.view.size.y))
+        gl.glRenderbufferStorage(gl.GL_RENDERBUFFER, gl.GL_DEPTH_COMPONENT24, math.ceil(self.view.size.x), math.ceil(self.view.size.y))
         gl.glFramebufferRenderbuffer(gl.GL_FRAMEBUFFER, gl.GL_DEPTH_ATTACHMENT, gl.GL_RENDERBUFFER, self.rbo)
         gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, 0)
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)

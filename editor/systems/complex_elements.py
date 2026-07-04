@@ -14,6 +14,11 @@ class MenuBar(UiElement):
             self.text = TextElement(None, menu_name, width + 15, 20)
             self.text.set_text_size(12).set_anchor("mm", TextRenderAnchor.middle_middle)
 
+            self.elems = []
+
+        def add_elem(self, ui_elem: UiElement):
+            self.elems.append(ui_elem)
+
         def build_sprite(self):
             width, height = self.size
             if not self.focused:
@@ -35,7 +40,7 @@ class MenuBar(UiElement):
 
         def handle_input(self, keycodes, mouse_buttons, input_handler):
             if input_handler.get_mouse_button_up(mouse_buttons.LEFT):
-                open_popup(self.rect.bottomleft).register()
+                open_popup(self.rect.bottomleft).set_children(self.elems).register()
 
     def __init__(self, parent, **kwrds):
         super().__init__(parent, 100, 20, **kwrds)
@@ -48,6 +53,13 @@ class MenuBar(UiElement):
 
     def add_menu(self, menu_name: str):
         self.menus[menu_name] = __class__.MenuButton(menu_name)
+
+    def add_to_menu(self, menu_name: str, elem: UiElement):
+        if not issubclass(type(elem), UiElement):
+            modules.logger("EDITOR").log_warning(f"Cannot add {type(elem).__name__} to a menu, as it's not a valid UI Element!")
+            return 
+        
+        self.menus[menu_name].add_elem(elem)
 
     def build_sprite(self):
         fill = (77, 77, 78, 255)
@@ -66,7 +78,6 @@ class MenuBar(UiElement):
             menu.draw(editor, pos)
 
     def handle_input(self, keycodes, mouse_buttons, input_handler):
-        print("WOW!")
         for elem in self.menus.values():
             if elem.rect.collide_point(glm.vec2(input_handler.mouse_pos)):
                 elem.handle_input(keycodes, mouse_buttons, input_handler)

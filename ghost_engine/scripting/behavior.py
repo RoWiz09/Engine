@@ -4,6 +4,8 @@ from ..core.logger import Logger
 from typing import final
 from typing import TYPE_CHECKING, Any, TypeAlias
 
+from abc import ABC, abstractmethod
+
 if TYPE_CHECKING:
     from ..object import GameObject as object
     from .collider_type import CollisionInfo
@@ -19,6 +21,45 @@ EXCLUDED_FROM_BUILD = set()
 def exclude_from_build(func):
     global EXCLUDED_FROM_BUILD
     EXCLUDED_FROM_BUILD.add(func)
+
+class NonOverrideable:
+    """
+        Makes the decorated method unable to be overridden.
+    """
+    def __init__(self, func):
+        self.func = func
+
+        self.inst = None
+        def wrapper(*args, **kwds):
+            return self.func(self.inst, *args, **kwds)
+        self.wrapped_func = wrapper
+
+    def __set_name__(self, owner: Behavior, name):        
+        if not getattr(owner, 'override-patched', False):
+            setattr(owner, 'orig-init-subclass', owner.__dict__['__init_subclass__'])
+            def wrapper(cls):
+                non_overrideable: dict[str, NonOverrideable] = getattr(owner, 'non-overrideable-methods', dict())
+                for name, method in non_overrideable.items():
+                    func = getattr(cls, name)
+                    if func and func != method:
+                        print(func, method)
+                        Logger("OVERRIDE PREVENTION").log_warning(f"{name} is marked as non-overrideable, yet was overriden by {cls.__name__}. It has been removed.")
+                        delattr(cls, name)
+
+                getattr(owner, 'orig-init-subclass').__func__(cls)
+            
+            owner.__init_subclass__ = classmethod(wrapper)
+            setattr(owner, 'non-overrideable-methods', dict())
+            setattr(owner, 'override-patched', True)
+
+        getattr(owner, 'non-overrideable-methods')[self.func.__name__] = self.wrapped_func
+    
+    def __call__(self, *args, **kwds):
+        return self.func(*args, **kwds)
+    
+    def __get__(self, instance, owner):
+        self.inst = instance
+        return self.wrapped_func
 
 class InitMethod:
     """
@@ -49,7 +90,7 @@ class InitMethod:
 
         return wrapper
 
-class AdvancedBehavior:
+class AdvancedBehavior(ABC):
     """
     An interface, adding callbacks to a base behavior for the following events:
     - `on_set_enabled`: Ran whenever the @enabled.setter method is called.
@@ -73,19 +114,18 @@ class AdvancedBehavior:
             )
         
         else:
-            Logger("ADVANCED BEHAVIOR").log_error("Behavior.enabled attribute is not a property!")
+            Logger("ADVANCED BEHAVIOR").log_error("Behavior.enabled attribute is not a property!")        
 
     def on_set_enabled(self):
         pass
-
-    @exclude_from_build
+    
     def on_editor_reload(self):
         """
             A method called when the editor reloads scripts. This is not included in builds.
         """
         pass
 
-class PhysicsBehavior:
+class PhysicsBehavior(ABC):
     """
     An interface, adding methods for the following events:
     - `on_collision` (variants: `_start`, `_exit`): Called when two collision objects collide with each other.
@@ -148,7 +188,7 @@ class PhysicsBehavior:
         """
         pass
 
-class RenderBehavior:
+class RenderBehavior(ABC):
     """
     An interface, adding methods for the following events:
     - `pre_render`: A method called before rendering any objects.
@@ -174,7 +214,7 @@ class RenderBehavior:
         """
         pass
 
-class Behavior:
+class Behavior(ABC):
     """
     The basic class all game scripts are required to inherit from. Implements events for:
     - `__init__`: Class initalization. 
@@ -297,9 +337,10 @@ class Behavior:
         """
         pass
 
-    @final
+    @NonOverrideable
     def destroy(self):
         Behavior.behavior_instances[type(self)].remove(self.__gameobject)
+        print(f"Destroying {self}")
 
 class EditorField:
     def __init__(self, field_type: type, default=None):

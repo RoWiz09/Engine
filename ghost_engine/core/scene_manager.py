@@ -30,13 +30,6 @@ class SceneInfo:
     scene_name: str
     scene_index: int
 
-def check_iterable(field):
-    try: 
-        iter(field)
-        return True
-    except:
-        return False
-
 class SceneManager:
     _instance = None
     _created = False
@@ -219,10 +212,15 @@ class SceneManager:
 
         # Call unload callbacks on current scene before switching
         scene_info = SceneInfo(scene_name, scene_index)
-        if alert_scripts:
-            for obj in self.game_objects:
+        for obj in self.game_objects.copy():
+            if alert_scripts:
                 for script in obj.behaviors:
                     script.on_scene_unload(scene_info)
+        
+            if not obj.static:
+                obj.destroy()
+                self.game_objects.remove(obj)
+
 
         # Load new scene objects
         scene_data = self.pack.read_json(scene_path)
@@ -321,75 +319,6 @@ class SceneManager:
         for _, components in Behavior.component_category_registry.items():
             for component in components:
                 component.on_frame_end()
-
-    def save(self):        
-        scene_path = self.scenes[self.cur_scene]
-
-        hierarchy: dict[GameObject, dict] = self.get_hierarchy()[None]
-
-        cur_tree = []
-        
-        # Serialize EditorField data
-        def json_serialize(component: Behavior, variable: str):
-            field = getattr(component, variable)
-            if isinstance(field, (str, int, list, float, bool, dict)):
-                return field
-            if check_iterable(field):
-                return list(field)
-
-        # Turn an object into a JSON dictionary
-        def serialize_object(obj: GameObject, children: dict[GameObject, dict]):
-            base = {
-                "name": obj.name,
-
-                "pos": obj.transform.localpos.to_list(),
-                "rot": obj.transform.localrot.to_list(),
-                "scale": obj.transform.scale.to_list(),
-
-                "material": None,
-                "components": [],
-
-                "children": []
-            }
-
-            mat_idx = list(self.materials.values()).index(obj.mat)
-            material = list(self.materials.keys())[mat_idx]
-            base["material"] = material
-
-            for component in obj.behaviors:
-                if component.init_method is None:
-                    base["components"].append({
-                        "module": type(component).__module__,
-                        "class": type(component).__name__,
-                        "vars": {}
-                    })
-                    for var, field in vars(type(component)).items():
-                        if isinstance(field, EditorField):
-                            base["components"][-1]["vars"][var] = json_serialize(component, var)
-                else:
-                    base["components"].append({
-                        "module": type(component).__module__,
-                        "class": type(component).__name__,
-                        "vars": [
-                            *component.init_vars
-                        ]
-                    })
-
-            if children != {}:
-                for child, children in children.items():
-                    object_dict = serialize_object(child, children)
-                    base["children"].append(object_dict)
-                    
-            return base
-            
-        for obj, children in hierarchy.items():
-            cur_tree.append(serialize_object(obj, children))
-
-        with open(scene_path, "w") as scene_file:
-            json.dump({
-                "scene_index": list(self.scenes.keys()).index(self.cur_scene),
-                "objects": cur_tree
-            }, scene_file)
 
     def save_scene_indices(self):
         for idx, scene in enumerate(self.scenes.values()):

@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from ghost_engine.core.input import Input
     
     from ghost_engine.core.input import KeyCodes, MouseButtons
-    from ghost_engine.scripting.behavior import EditorField
+    from ghost_engine.scripting.behavior import EditorField, Behavior
     from ghost_engine.core import logger as LoggerModule
     from ghost_engine.core.packer import Pack, PathLike 
 

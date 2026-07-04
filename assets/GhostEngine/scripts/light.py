@@ -22,21 +22,21 @@ class Spotlight(Behavior, LightType):
     color = EditorField(vec3, vec3(255, 255, 255))
 
     direction = EditorField(vec3, vec3())
+
     range = EditorField(float, 1)
     cutOff = EditorField(float, 57)
     outerCutOff = EditorField(float, 57)
 
-    constant = EditorField(float, 1.0)
-    linear = EditorField(float, 0.09)
-    quadratic = EditorField(float, 0.032)
-
     def __init__(self, gameobject):
         super().__init__(gameobject)
-        self.cutoff_radians = radians(self.cutOff)
-        self.outer_cutoff_radians = radians(self.outerCutOff)
 
     def update(self, dt):
-        self.cutoff_radians = radians(self.cutOff)
-        self.outer_cutoff_radians = radians(self.outerCutOff)
-
         return super().update(dt)
+
+    @property
+    def cutoff_radians(self):
+        return radians(self.cutOff)
+    
+    @property
+    def outer_cutoff_radians(self):
+        return radians(self.outerCutOff)

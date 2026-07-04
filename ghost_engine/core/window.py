@@ -44,6 +44,7 @@ class Window:
         glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
         glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
         glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
+        glfw.window_hint(glfw.SAMPLES, 4)
 
         self.window = glfw.create_window(width, height, name, None, None)
         glfw.make_context_current(self.window)
@@ -54,6 +55,7 @@ class Window:
 
         gl.glEnable(gl.GL_CULL_FACE)
         gl.glEnable(gl.GL_DEPTH_TEST)
+        gl.glEnable(gl.GL_MULTISAMPLE)
 
         self.input_handler = Input()
         self.scene_manager = SceneManager()

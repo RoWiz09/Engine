@@ -13,7 +13,7 @@ from systems.editor_windows import *
 
 from systems.discord_rich_presence import DiscordRichPresence
 
-from systems.build import build_game
+from systems.build import write_packs
 from systems import global_vars
 
 import importlib
@@ -25,6 +25,13 @@ def glfw_error_handler(e_code:str, desc:str):
     Logger("CORE").log_fatal(f"GLFW Error [{e_code}] : {desc}")
 
 glfw.set_error_callback(glfw_error_handler)
+
+def check_iterable(field):
+    try: 
+        iter(field)
+        return True
+    except:
+        return False
 
 class Window:
     _instance = None
@@ -58,16 +65,12 @@ class Window:
         glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
         glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
 
-        glfw.window_hint(glfw.SAMPLES, 4)
-
         self.window = glfw.create_window(width, height, "GhostEngine Editor", None, None)
-        glfw.make_context_current(self.window)
+        glfw.make_context_current(self.window)        
 
         self.logger.log_debug("GLFW initalized successfully!")
 
         gl.glEnable(gl.GL_CULL_FACE)
-        gl.glEnable(gl.GL_MULTISAMPLE)
-
         gl.glEnable(gl.GL_BLEND)
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
         
@@ -84,8 +87,9 @@ class Window:
         with open(".rproj") as project_file:
             self.project_data = json.load(project_file)
         os.environ["project"] = self.project_data["name"]
-
         glfw.set_window_title(self.window, "GhostEngine Editor - " + self.project_data["name"])
+
+        # write_packs()
 
         # RoWiz (5/4/26):
         # Before creating the scene manager, we have to modify the pack class functions.
@@ -140,15 +144,22 @@ class Window:
         self.discord_rpc.connect()
         self.discord_rpc.start_handling_activity()
 
+        self.current_primary_popup = None
+
     def setup_root_menu_bar(self):
         self.drawer.top_bar.add_menu("File")
+
+        self.drawer.top_bar.add_to_menu("File", Button(None, 100, 15, "Save", self.save))
+        self.drawer.top_bar.add_to_menu("File", Button(None, 100, 15, "Close", None))
+        self.drawer.top_bar.add_to_menu("File", HorizontalLine(None, width=100))
+        self.drawer.top_bar.add_to_menu("File", Button(None, 100, 15, "Close", None))
 
     def should_close(self):
         return glfw.window_should_close(self.window)
     
     def setup_pack(self):
-        def pack_init(inst: global_vars.Pack):
-            inst.files_ = []
+        def pack_init(self: global_vars.Pack):
+            self.files_ = []
 
             assets = Path("assets")
             for dirpath, _, filenames in os.walk(assets):
@@ -157,7 +168,7 @@ class Window:
                     continue
 
                 for file in filenames:
-                    inst.files_.append(dirpath / file)
+                    self.files_.append(dirpath / file)
 
         get_decorator = getattr(global_vars.pack, "_Pack__get_decorator")
         @get_decorator
@@ -176,16 +187,17 @@ class Window:
         def pack_files(inst: global_vars.Pack):
             return inst.files_
         
-        def pack_load_behavior(inst: global_vars.Pack, module: str, behavior_class: str):
-            module_ = importlib.import_module(module)
-            return getattr(module_, behavior_class)
+        def load_behavior(inst: global_vars.Pack, module: str, behavior_class: str):
+            import importlib
+            module = importlib.import_module(module)
+            return getattr(module, behavior_class)
         
         setattr(global_vars.pack, "__init__", pack_init)
         setattr(global_vars.pack, "get_contents", pack_get_contents)
         setattr(global_vars.pack, "get_raw", pack_get_raw)
         setattr(global_vars.pack, "read_json", pack_read_json)
         setattr(global_vars.pack, "files", pack_files)
-        setattr(global_vars.pack, "load_behavior", pack_load_behavior)
+        setattr(global_vars.pack, "load_behavior", load_behavior)
 
     def setup_async_loading(self):
         def load_scene_index_async(self: global_vars.SceneManager, scene_index: int, alert_scripts: bool = True):
@@ -205,11 +217,9 @@ class Window:
         setattr(global_vars.scene_manager, "load_scene_index_async", load_scene_index_async)
         setattr(global_vars.scene_manager, "load_scene_async", load_scene_async)
 
-    def render_scene(self, multisample_frame_buffer):
-        if not multisample_frame_buffer:
-            Logger("RENDERER").log_fatal("Tried to render the scene without passing a multisample frame buffer!")
-
-        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, multisample_frame_buffer)
+    def render_scene(self, frame_buffer = None):
+        frame_buffer = frame_buffer if frame_buffer else self.scene_framebuffer
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, frame_buffer)
         gl.glEnable(gl.GL_DEPTH_TEST)
 
         gl.glClearColor(0.25, 0.25, 1, 1)
@@ -221,11 +231,8 @@ class Window:
             self.editor_cam.get_view_pos()
         )
 
-        gl.glBindFramebuffer(gl.GL_READ_FRAMEBUFFER, multisample_frame_buffer)
-        gl.glBindFramebuffer(gl.GL_DRAW_FRAMEBUFFER, self.scene_framebuffer)
-        gl.glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, gl.GL_COLOR_BUFFER_BIT, gl.GL_NEAREST)
-
-        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
+        if frame_buffer != 0:
+            gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
         gl.glDisable(gl.GL_DEPTH_TEST)
 
     def update(self):
@@ -243,7 +250,7 @@ class Window:
             self.moving_camera = not self.moving_camera
 
         # Set up for a new frame
-        width, height = glfw.get_window_size(self.window)
+        width, height = self.size()
         gl.glViewport(0, 0, width, height)
 
         if self.moving_camera:
@@ -263,13 +270,78 @@ class Window:
     def size(self):
         return glfw.get_window_size(self.window)
 
-    def quit(self):
-        glfw.set_window_should_close(self.window, True)
-
     def terminate(self):
         glfw.terminate()
 
-        self.scene_manager.save()
+    def save(self):
+        scene_manager = self.scene_manager
+        
+        scene_path = scene_manager.scenes[scene_manager.cur_scene]
+        hierarchy: dict[GameObject, dict] = scene_manager.get_hierarchy()[None]
+
+        cur_tree = []
+        
+        # Serialize EditorField data
+        def json_serialize(component: global_vars.Behavior, variable: str):
+            field = getattr(component, variable)
+            if isinstance(field, (str, int, list, float, bool, dict)):
+                return field
+            if check_iterable(field):
+                return list(field)
+
+        # Turn an object into a JSON dictionary
+        def serialize_object(obj: GameObject, children: dict[GameObject, dict]):
+            base = {
+                "name": obj.name,
+
+                "pos": obj.transform.localpos.to_list(),
+                "rot": obj.transform.localrot.to_list(),
+                "scale": obj.transform.scale.to_list(),
+
+                "material": None,
+                "components": [],
+
+                "children": []
+            }
+
+            mat_idx = list(scene_manager.materials.values()).index(obj.mat)
+            material = list(scene_manager.materials.keys())[mat_idx]
+            base["material"] = material
+
+            for component in obj.behaviors:
+                if component.init_method is None:
+                    base["components"].append({
+                        "module": type(component).__module__,
+                        "class": type(component).__name__,
+                        "vars": {}
+                    })
+                    for var, field in vars(type(component)).items():
+                        if isinstance(field, global_vars.editor_field):
+                            base["components"][-1]["vars"][var] = json_serialize(component, var)
+                else:
+                    base["components"].append({
+                        "module": type(component).__module__,
+                        "class": type(component).__name__,
+                        "vars": [
+                            *component.init_vars
+                        ]
+                    })
+
+            if children != {}:
+                for child, children in children.items():
+                    object_dict = serialize_object(child, children)
+                    base["children"].append(object_dict)
+                    
+            return base
+            
+        for obj, children in hierarchy.items():
+            cur_tree.append(serialize_object(obj, children))
+
+        with open(scene_path, "w") as scene_file:
+            json.dump({
+                "scene_index": list(scene_manager.scenes.keys()).index(scene_manager.cur_scene),
+                "objects": cur_tree
+            }, scene_file)
 
 def get_path(location: str):
     if not location.endswith(".rproj") and os.path.exists(location):
@@ -288,3 +360,5 @@ KeyCodes, MouseButtons = global_vars.key_codes, global_vars.mouse_buttons
 window = Window(base_path)
 while not window.should_close():
     window.update()
+
+window.terminate()

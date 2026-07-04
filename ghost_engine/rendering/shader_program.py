@@ -15,22 +15,18 @@ def is_iterable(obj):
 
 class PointLightUBO(ctypes.Structure):
     _fields_ = [
-        ("position",    ctypes.c_float * 4),  # xyz + intensity
+        ("position",    ctypes.c_float * 4),
         ("color",       ctypes.c_float * 4),
-        ("range", ctypes.c_float),  # Range
+        ("range", ctypes.c_float),
     ]
 
 
 class SpotLightUBO(ctypes.Structure):
     _fields_ = [
-        ("position",    ctypes.c_float * 4),
+        ("position",    ctypes.c_float * 4), 
         ("direction",   ctypes.c_float * 4),
-        ("angles",      ctypes.c_float * 4),  # cutOff, outerCutOff
         ("color",       ctypes.c_float * 4),
-        ("ambient",     ctypes.c_float * 4),
-        ("diffuse",     ctypes.c_float * 4),
-        ("specular",    ctypes.c_float * 4),
-        ("attenuation", ctypes.c_float * 4),
+        ("config",      ctypes.c_float * 3), # Outer, Inner, Range
     ]
 
 class ShaderProgram:
@@ -213,19 +209,10 @@ class ShaderProgram:
             data = SpotLightUBO(
                 (*light.gameobject.transform.pos, light.intensity),
                 (*direction, 0.0),
-
-                (glm.cos(light.cutoff_radians),
-                glm.cos(light.outer_cutoff_radians),
-                0.0, 0.0),
-
                 (*light.color, 0.0),
-                (*light.ambient, 0.0),
-                (*light.diffuse, 0.0),
-                (*light.specular, 0.0),
 
-                (light.constant,
-                light.linear,
-                light.quadratic,
+                (light.outer_cutoff_radians,
+                light.cutoff_radians,
                 light.range)
             )
 
