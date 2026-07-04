@@ -42,7 +42,6 @@ class NonOverrideable:
                 for name, method in non_overrideable.items():
                     func = getattr(cls, name)
                     if func and func != method:
-                        print(func, method)
                         Logger("OVERRIDE PREVENTION").log_warning(f"{name} is marked as non-overrideable, yet was overriden by {cls.__name__}. It has been removed.")
                         delattr(cls, name)
 

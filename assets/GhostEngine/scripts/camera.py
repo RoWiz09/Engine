@@ -35,6 +35,3 @@ class Camera(Behavior, CamType):
     def get_view_pos(self):
         return self.gameobject.transform.pos + self.position_mod
     
-    def destroy(self):
-        return super().destroy()
-    
