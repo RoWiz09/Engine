@@ -85,6 +85,8 @@ class TaskScheduler:
         self.__active_tasks: list[ActiveTask] = []
 
         self.logger = global_vars.logger("TASK SCHEDULER")
+        self.manager = multiprocessing.Manager()
+
     @classmethod
     def schedule_task(cls, method: Callable[[Logger], Any], *args, **kwds):
         task_info = Task(TaskStates.QUEUED, None, method, args, kwds)
@@ -96,10 +98,10 @@ class TaskScheduler:
         return os.getpid()
     
     def get_queue(self, max_size: int = 0):
-        return multiprocessing.Queue(max_size)
+        return self.manager.Queue(max_size)
     
     def get_lock(self):
-        return multiprocessing.Lock()
+        return self.manager.Lock()
 
     def update_tasks(self):
         remaining = []
