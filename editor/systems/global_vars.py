@@ -48,10 +48,12 @@ def parse_args():
     parser = ArgumentParser()
     parser.add_argument("project", type=str)
     parser.add_argument("--enable-console", action='store_true')
+    parser.add_argument("--task-limit", type=int, default=16)
 
     ARGS = parser.parse_args()
 
 GL_FUNC_LOCK = threading.Lock()
+MAIN_PROC = False
 
 def get_modules(base_path: str):
     global logger, logger_module, scene_manager, input_handler, key_codes, mouse_buttons, editor_field, pack
@@ -84,7 +86,6 @@ def get_modules(base_path: str):
     mouse_buttons = getattr(init_module, "MouseButtons")
     editor_field = getattr(sys.modules["ghost_engine.scripting.behavior"], "EditorField")
     pack = getattr(sys.modules["ghost_engine.core.packer"], "Pack")
-    getattr(init_module, "setup")()
 
     return logger, scene_manager, input_handler
 

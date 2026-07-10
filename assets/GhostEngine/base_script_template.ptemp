@@ -1,4 +1,4 @@
-from ghost_engine.behavior import Behavior
+from ghost_engine.scripting.behavior import Behavior
 
 class ClassName(Behavior):
     def __init__(self, gameobject):

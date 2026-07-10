@@ -22,6 +22,8 @@ class ColliderType:
 
     last_simplex: list[glm.vec3] = []
 
+    trigger_collider: bool
+
     def __init_subclass__(cls):
         field = EditorField(bool, False)
         setattr(cls, "trigger_collider", field)

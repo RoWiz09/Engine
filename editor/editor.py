@@ -5,19 +5,22 @@ from pathlib import Path
 import glfw
 import os, OpenGL.GL as gl
 
-from systems.editor_camera import editor_camera
-
-from systems.window_drawer import WindowDrawer
-from systems.window_docker import *
-from systems.editor_windows import *
-
-from systems.discord_rich_presence import DiscordRichPresence
-
-from systems.build import write_packs
-from systems import global_vars
-
 import importlib
 import json
+
+if __name__ == "__main__":
+    from systems.editor_camera import editor_camera
+
+    from systems.window_drawer import WindowDrawer
+    from systems.window_docker import *
+    from systems.editor_windows import *
+
+    from systems.discord_rich_presence import DiscordRichPresence
+
+    from systems.task_scheduler import TaskScheduler
+
+    from systems.build import build_game
+    from systems import global_vars
 
 glfw_initalized = False
 
@@ -87,6 +90,7 @@ class Window:
         with open(".rproj") as project_file:
             self.project_data = json.load(project_file)
         os.environ["project"] = self.project_data["name"]
+        os.environ["project-path"] = os.getcwd()
         glfw.set_window_title(self.window, "GhostEngine Editor - " + self.project_data["name"])
 
         # write_packs()
@@ -141,16 +145,19 @@ class Window:
         self.last_time = glfw.get_time()
 
         self.discord_rpc = DiscordRichPresence("1510115212055937075")
-        self.discord_rpc.connect()
         self.discord_rpc.start_handling_activity()
 
         self.current_primary_popup = None
+
+        self.__task_scheduler__ = TaskScheduler()
 
     def setup_root_menu_bar(self):
         self.drawer.top_bar.add_menu("File")
 
         self.drawer.top_bar.add_to_menu("File", Button(None, 100, 15, "Save", self.save))
         self.drawer.top_bar.add_to_menu("File", Button(None, 100, 15, "Close", None))
+        self.drawer.top_bar.add_to_menu("File", HorizontalLine(None, width=100))
+        self.drawer.top_bar.add_to_menu("File", Button(None, 100, 15, "Build", build_game))
         self.drawer.top_bar.add_to_menu("File", HorizontalLine(None, width=100))
         self.drawer.top_bar.add_to_menu("File", Button(None, 100, 15, "Close", None))
 
@@ -262,6 +269,8 @@ class Window:
 
         glfw.swap_buffers(self.window)
 
+        self.__task_scheduler__.update_tasks()
+
     def __render_editor_ui(self):
         self.drawer.render(self)
         if not self.moving_camera:
@@ -344,21 +353,26 @@ class Window:
             }, scene_file)
 
 def get_path(location: str):
-    if not location.endswith(".rproj") and os.path.exists(location):
+    if not location.endswith(".rproj") or not os.path.exists(location):
         raise ValueError("Executable argument project-path is" +
                          " pointing to an invalid or missing project!")
     
     return os.path.split(location)[0]
 
-global_vars.parse_args()
-base_path = get_path(global_vars.ARGS.project)
-os.chdir(base_path)
-Logger, SceneManager, Input = global_vars.get_modules(base_path)
-global_vars.logger_module.configure_loggers(log_to_console = True, log_level = global_vars.logger_module.LoggingLevels.DEBUG)
-KeyCodes, MouseButtons = global_vars.key_codes, global_vars.mouse_buttons
+if __name__ == "__main__":
+    global_vars.parse_args()
+    base_path = get_path(global_vars.ARGS.project)
+    os.chdir(base_path)
+    Logger, SceneManager, Input = global_vars.get_modules(base_path)
+    global_vars.logger_module.configure_loggers(log_to_console = True, log_level = global_vars.logger_module.LoggingLevels.DEBUG)
+    KeyCodes, MouseButtons = global_vars.key_codes, global_vars.mouse_buttons
 
-window = Window(base_path)
-while not window.should_close():
-    window.update()
+    global_vars.MAIN_PROC = True
+    
+    getattr(sys.modules["ghost_engine.core.logger"], "setup")()
 
-window.terminate()
+    window = Window(base_path)
+    while not window.should_close():
+        window.update()
+
+    window.terminate()

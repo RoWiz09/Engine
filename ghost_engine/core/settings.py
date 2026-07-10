@@ -1,8 +1,6 @@
 from typing_extensions import overload
 from pathlib import Path
 
-import os
-
 class Settings:
     base = Path("data")
     @overload

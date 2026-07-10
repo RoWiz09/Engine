@@ -4,8 +4,6 @@ from ..core.logger import Logger
 from typing import final
 from typing import TYPE_CHECKING, Any, TypeAlias
 
-from abc import ABC, abstractmethod
-
 if TYPE_CHECKING:
     from ..object import GameObject as object
     from .collider_type import CollisionInfo
@@ -89,7 +87,7 @@ class InitMethod:
 
         return wrapper
 
-class AdvancedBehavior(ABC):
+class AdvancedBehavior:
     """
     An interface, adding callbacks to a base behavior for the following events:
     - `on_set_enabled`: Ran whenever the @enabled.setter method is called.
@@ -124,7 +122,7 @@ class AdvancedBehavior(ABC):
         """
         pass
 
-class PhysicsBehavior(ABC):
+class PhysicsBehavior:
     """
     An interface, adding methods for the following events:
     - `on_collision` (variants: `_start`, `_exit`): Called when two collision objects collide with each other.
@@ -187,7 +185,7 @@ class PhysicsBehavior(ABC):
         """
         pass
 
-class RenderBehavior(ABC):
+class RenderBehavior:
     """
     An interface, adding methods for the following events:
     - `pre_render`: A method called before rendering any objects.
@@ -213,7 +211,7 @@ class RenderBehavior(ABC):
         """
         pass
 
-class Behavior(ABC):
+class Behavior:
     """
     The basic class all game scripts are required to inherit from. Implements events for:
     - `__init__`: Class initalization. 

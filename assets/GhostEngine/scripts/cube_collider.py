@@ -2,11 +2,8 @@ from __future__ import annotations
 
 from ghost_engine.scripting.behavior import Behavior, EditorField, PhysicsBehavior
 from ghost_engine.scripting.collider_type import ColliderType
-from ghost_engine.core.scene_manager import SceneManager
-
-
+from ghost_engine.object import GameObject
 from pyglm.glm import vec3
-
 
 class CubeCollider(Behavior, ColliderType):
     category = "Physics"
@@ -68,11 +65,11 @@ class CubeCollider(Behavior, ColliderType):
         return self.gameobject.transform.pos + self.pos_offset
 
     def update(self, dt):
-        for obj in self.get_objects_with_component(CubeCollider):
+        for obj in GameObject.find_with_behavior(CubeCollider):
             if obj is self.gameobject:
                 continue
 
-            for collider in obj.get_components(CubeCollider):
+            for collider in obj.get_behaviors(CubeCollider):
                 if not [self, collider] in CubeCollider.collisions_this_frame and not [self, collider] in CubeCollider.collisions_this_frame:
                     if self.check_collision(collider):
                         if not any([self.trigger_collider, collider.trigger_collider]):
@@ -87,7 +84,7 @@ class CubeCollider(Behavior, ColliderType):
                     if in_this_frame and not in_last_frame:
                         for component in self.gameobject.behaviors:
                             if issubclass(type(component), PhysicsBehavior):
-                                component.on_collision_start(collider.gameobject)
+                                component.on_collision_enter(collider.gameobject)
                     elif in_this_frame:
                         for component in self.gameobject.behaviors:
                             if issubclass(type(component), PhysicsBehavior):

@@ -86,6 +86,8 @@ class DiscordRichPresence:
     def start_handling_activity(self):
         import threading
         def handler(self: DiscordRichPresence):
+            self.connect()
+
             while True:
                 state_data = [f"Working on project: {os.environ.get("project", "")}"]
                 if self.flags & PRESENCE_SHOW_SCENE:

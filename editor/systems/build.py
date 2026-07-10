@@ -1,12 +1,17 @@
 from . import global_vars
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeAlias, Any
 if TYPE_CHECKING:
+    from ghost_engine.core.logger import Logger
     from ghost_engine.scripting import behavior
+
+else:
+    Logger: TypeAlias = Any
 
 from pathlib import Path
 
 from . import global_vars as modules
+from .task_scheduler import TaskScheduler
 
 import subprocess
 import os, struct
@@ -16,24 +21,42 @@ import inspect
 import hashlib
 import json
 import sys
+import io
 
-def make_module(tmp_path: Path, dlc_path: Path):
+def make_module(logger: Logger, module_name: str, tmp_path: Path, dlc_path: Path):
+    module_files = []
+
     for dirpath, _, filenames in dlc_path.walk():
-        module_path = None
         for fn in filenames:
             if not fn.endswith(".py"):
                 continue
 
-            filepath = dlc_path / dirpath / fn
-            if module_path is None:
-                module_path = tmp_path / dirpath
-                module_path.mkdir(parents=True, exist_ok=True)
+            if "__init__.py" in fn:
+                logger.log_fatal("Modules cannot contain an __init__.py file!")
+
+            filepath = dirpath / fn
+            module_path = tmp_path / dirpath.relative_to("assets")
+            module_path.mkdir(parents=True, exist_ok=True)
             module_file_path = module_path / fn
+            
+            module_files.append(".".join((dirpath / fn).parts).removesuffix(".py"))
 
             module_file_path.write_text(filepath.read_text())
 
-def build_game(*dynamic_libs):
-    logger = modules.logger("COMPILATION")
+    init_file_path = tmp_path / module_name / "__init__.py"
+    init_file_path.write_text("\n".join(f"import {file}" for file in module_files))
+
+    build_command = [
+        'py', '-m', 'nuitka',
+        '--mode=package', '--remove-output', "--no-pyi-file", f'--output-dir={Path(os.environ["project-path"]) / 'dist' / os.environ['project'] / 'data'}', 
+        str(tmp_path / module_name)
+    ]
+    subprocess.run(build_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=tmp_path)
+
+def build_task(logger: Logger):
+    """
+        DO NOT CALL THIS!
+    """
     logger.log_debug("Building Game...")
     
     dlcs = ["GhostEngine"]
@@ -50,34 +73,35 @@ def build_game(*dynamic_libs):
                 
         return False
 
-    modules_tmpdir = tempfile.TemporaryDirectory()
-    (tmp_path := Path(modules_tmpdir.name) / 'assets').mkdir()
-    for dlc in dlcs:
-        dlc_path = assets_path / dlc
-        
-        if not check_for_script(dlc_path):
-            continue
-        
-        (dlc_tmp_path := tmp_path / dlc).mkdir(parents=True)
-        make_module(dlc_tmp_path, dlc_path)
+    # with tempfile.TemporaryDirectory() as modules_tmpdir:
+    #     (tmp_path := Path(modules_tmpdir) / 'assets').mkdir()
+    #     for dlc in dlcs:
+    #         dlc_path = assets_path / dlc
+            
+    #         if not check_for_script(dlc_path):
+    #             continue
+            
+    #         (tmp_path / dlc).mkdir(parents=True)
+    #         make_module(logger, dlc, tmp_path, dlc_path)
 
-    build_command = [
-        'py', '-m', 'nuitka',
-        '--deployment', '--standalone', f'--include-package-data={str(tmp_path)}', f'--output-dir={Path('dist') / os.environ['project']}',
-        os.environ['project']+'.py'
-    ]
-    subprocess.run(build_command)
+    #     build_command = [
+    #         'py', '-m', 'nuitka', '--remove-output',
+    #         '--deployment', '--standalone', f'--include-package-data={str(tmp_path)}', f'--output-dir={Path('dist') / os.environ['project']}',
+    #         os.environ['project']+'.py'
+    #     ]
+    #     subprocess.run(build_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-    modules_tmpdir.cleanup()
-
-    print("Writing asset packs...")
+    logger.log_debug("Writing asset packs...")
 
     # Pack the game assets
-    write_packs()
+    write_packs(logger)
 
-    print("Game built successfully!")
+    logger.log_info("Game built successfully!")
 
-def write_packs():
+def build_game(*dynamic_libs):
+    TaskScheduler.schedule_task(build_task)
+
+def write_packs(logger: Logger):
     assets_path = Path("assets")
     output_path = "dist" / Path(f"{os.environ["project"]}") / "data"
     output_path.mkdir(parents=True, exist_ok=True)
@@ -85,19 +109,14 @@ def write_packs():
     with open(".rproj") as project_file:
         project_data = json.load(project_file)
         dlcs.extend(project_data["dlc"].items())
+
+    logger.log_info(f"Discovered DLC's: {", ".join(os.path.split(dlc[1]['root'])[1] for dlc in dlcs)}")
     
     file_positions = {}
 
-    path_to_module = lambda p: str(p).replace(os.sep, ".").removesuffix(".py")
-    if TYPE_CHECKING:
-        behavior_type = behavior.Behavior
-        exclude_from_build = behavior.EXCLUDED_FROM_BUILD
-
-    else:
-        behavior_type = getattr(sys.modules["ghost_engine.scripting.behavior"], "Behavior")
-        exclude_from_build = getattr(sys.modules["ghost_engine.scripting.behavior"], "EXCLUDED_FROM_BUILD")
-
     for dlc_name, dlc_data in dlcs:
+        logger.log_info(f"Loading assets for DLC: {os.path.split(dlc_data['root'])[1]}")
+
         dlc_root: str = dlc_data["root"]
         dlc_file_path = output_path / (dlc_name + ".rpk")
         dlc_file = dlc_file_path.open("wb+")
@@ -109,37 +128,16 @@ def write_packs():
                 continue
 
             for file in files:
-                file_path = (dirpath / file)
-                if not file.endswith(".py"):
-                    with open(file_path) as f:
-                        content = f.read()
-                
-                else:
-                    module = importlib.import_module(path_to_module(file_path))
-                    module_lines = inspect.getsource(module).splitlines()
+                if file.endswith(".py"):
+                    continue
 
-                    deleted_data = []
-                    for name, obj in inspect.getmembers(module, inspect.isclass):
-                        if obj.__module__ != module.__name__:
-                            continue
-
-                        orig_dict = dict(obj.__dict__)
-                        for func in exclude_from_build:
-                            if not func.__name__ in orig_dict.keys():
-                                continue
-                            
-                            lines, start = inspect.getsourcelines(orig_dict[func.__name__])
-                            deleted_data.append((start - 1, len(lines) + start - 1))
-
-                    deleted_data.sort(key=lambda se: se[0])
-                    for start, end in deleted_data:
-                        module_lines = module_lines[:start] + module_lines[end:]
-                    
-                    content = "\n".join(module_lines)
+                file_path = dirpath / file
+                content = file_path.read_text()
 
                 file_positions[str(dlc_name / file_path.relative_to(assets_path/dlc_root))] = (len(file_bytes), len(content))
                 file_bytes += struct.pack(f"<{len(content)}s", content.encode())
-                
+        
+        logger.log_info("Writing assets to RPK file...")
         dlc_file.write(struct.pack("<Q", len(file_bytes)) + file_bytes)
         dlc_file.flush()
         
@@ -148,6 +146,7 @@ def write_packs():
         dlc_file.write(struct.pack("<4sQ", b"HA", 32) + hash_)
         dlc_data["hash"] = hash_
 
+    logger.log_info("Writing the Master Pack file")
     master = output_path / "mdlc.mrpk"
     master_file = master.open("wb+")
 
