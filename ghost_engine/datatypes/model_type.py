@@ -1,14 +1,14 @@
 from .engine_data_type import DataType, DisplayMethods
 from pathlib import Path
 
-PARSABLE_MODEL_TYPES = [
-    ".obj"
-]
+PARSABLE_MODEL_TYPES = (
+    ".obj",
+)
 
 class Model(DataType):
     def __init__(self, default: str = ""):
         super().__init__()
-        self.path = default if Path(default).suffix.lower() in PARSABLE_MODEL_TYPES else ""
+        self.path = str(default) if Path(str(default)).suffix.lower() in PARSABLE_MODEL_TYPES else ""
 
     def display(self):
         return DisplayMethods.DROP_FIELD, str(self.path)
