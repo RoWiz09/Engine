@@ -27,6 +27,7 @@ else:
     Input: TypeAlias = Any
 
 from dataclasses import dataclass
+import weakref
  
 @dataclass
 class DragData:
@@ -241,7 +242,7 @@ class EditorUiWindow:
         self.build_sprite()
         self.rebuild_texture()
 
-        self.focused_elem: UiElement = None
+        self.focused_elem: weakref.ReferenceType[UiElement] = None
         self.__class__.instances.add(self)
 
         self.scroll = 0.0
@@ -467,23 +468,23 @@ class EditorUiWindow:
         if not self.focused_elem and HELD_DRAG_DATA and input_handler.get_mouse_button_up(mouse_buttons.LEFT):
             HELD_DRAG_DATA = None
         
-        if self.focused_elem:
-            elem = self.focused_elem
+        if self.focused_elem and self.focused_elem():
+            elem = self.focused_elem()
             if input_handler.get_mouse_button_down(mouse_buttons.LEFT):
                 HELD_DRAG_DATA = elem.get_drag_data()
-            elif not elem.rect.collide_point(glm.vec2(*input_handler.mouse_pos)) and not self.focused_elem.hold_focus:
-                self.focused_elem.lose_focus()
+            elif not elem.rect.collide_point(glm.vec2(*input_handler.mouse_pos)) and not elem.hold_focus:
+                elem.lose_focus()
                 self.focused_elem = None
 
             else:
                 if HELD_DRAG_DATA and input_handler.get_mouse_button_up(mouse_buttons.LEFT):
-                    self.focused_elem.drop_drag_data(HELD_DRAG_DATA)
+                    elem.drop_drag_data(HELD_DRAG_DATA)
                     HELD_DRAG_DATA = None
-                    self.focused_elem.handle_input(key_codes, mouse_buttons, input_handler)
+                    elem.handle_input(key_codes, mouse_buttons, input_handler)
                 elif HELD_DRAG_DATA:
-                    self.focused_elem.highlight_drag_data(HELD_DRAG_DATA)
+                    elem.highlight_drag_data(HELD_DRAG_DATA)
                 else:
-                    self.focused_elem.handle_input(key_codes, mouse_buttons, input_handler)
+                    elem.handle_input(key_codes, mouse_buttons, input_handler)
 
         else:
             for elem in self.ui_elements:
@@ -494,11 +495,11 @@ class EditorUiWindow:
                     continue
 
                 if elem.rect.collide_point(glm.vec2(*input_handler.mouse_pos)):
-                    if self.focused_elem:
-                        self.focused_elem.lose_focus()
+                    if self.focused_elem and self.focused_elem():
+                        self.focused_elem().lose_focus()
 
-                    self.focused_elem = elem
-                    self.focused_elem.focus()
+                    self.focused_elem = weakref.ref(elem)
+                    self.focused_elem().focus()
 
                     break
     
@@ -763,8 +764,9 @@ class Popup(EditorUiWindow):
         self.registered = True
 
     def deregister(self):
-        WindowDrawer().windows.remove(self)
-        WindowDrawer().floating_windows.remove(self)
+        if self in WindowDrawer().windows:
+            WindowDrawer().windows.remove(self)
+            WindowDrawer().floating_windows.remove(self)
 
         if self.subpopup:
             self.subpopup.deregister()
