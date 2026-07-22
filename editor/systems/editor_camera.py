@@ -28,6 +28,8 @@ class editor_camera:
         self.zoom = 45.0
         self.update_vectors()
 
+        self.boost_multiplier = 2.5
+
         self.window = glfw.get_current_context()
         self.input_handler = input_handler
 
@@ -42,6 +44,9 @@ class editor_camera:
 
     def process_keyboard(self, delta_time):
         velocity = self.speed * delta_time
+        if Input().get_key(KeyCodes.k_left_control):
+            velocity *= self.boost_multiplier
+
         if Input().get_key(KeyCodes.k_W):
             self.position += self.front * velocity
         if Input().get_key(KeyCodes.k_S):
@@ -50,6 +55,11 @@ class editor_camera:
             self.position -= self.right * velocity
         if Input().get_key(KeyCodes.k_D):
             self.position += self.right * velocity
+
+        if Input().get_key(KeyCodes.k_space):
+            self.position += self.up * velocity
+        if Input().get_key(KeyCodes.k_left_shift):
+            self.position -= self.up * velocity
 
     def process_mouse_movement(self):
         mx, my = Input().mouse_pos
