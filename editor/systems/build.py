@@ -13,15 +13,13 @@ from pathlib import Path
 from . import global_vars as modules
 from .task_scheduler import TaskScheduler
 
+import cryptography
 import subprocess
 import os, struct
-import importlib
 import tempfile
-import inspect
 import hashlib
+import shutil
 import json
-import sys
-import io
 
 def make_module(logger: Logger, module_name: str, tmp_path: Path, dlc_path: Path):
     module_files = []
@@ -39,19 +37,19 @@ def make_module(logger: Logger, module_name: str, tmp_path: Path, dlc_path: Path
             module_path.mkdir(parents=True, exist_ok=True)
             module_file_path = module_path / fn
             
-            module_files.append(".".join((dirpath / fn).parts).removesuffix(".py"))
+            module_files.append(".".join((dirpath / fn).parts[1:]).removesuffix(".py"))
 
             module_file_path.write_text(filepath.read_text())
+ 
 
-    init_file_path = tmp_path / module_name / "__init__.py"
-    init_file_path.write_text("\n".join(f"import {file}" for file in module_files))
+    logger.log_info("\n".join(f"import {file}" for file in module_files))
 
     build_command = [
         'py', '-m', 'nuitka',
-        '--mode=package', '--remove-output', "--no-pyi-file", f'--output-dir={Path(os.environ["project-path"]) / 'dist' / os.environ['project'] / 'data'}', 
+        '--mode=module', f'--include-package=assets.GhostEngine', '--remove-output', f'--output-dir={os.environ['project'] + ".dist"}', 
         str(tmp_path / module_name)
     ]
-    subprocess.run(build_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=tmp_path)
+    subprocess.run(build_command)
 
 def build_task(logger: Logger):
     """
@@ -64,6 +62,13 @@ def build_task(logger: Logger):
         project_data = json.load(project_file)
         dlcs.extend([val['root'] for val in project_data["dlc"].values()])
     
+    logger.log_info('Building Executable')
+    build_command = [
+        'py', '-m', 'nuitka', "--mode=onefile", '--remove-output', '--windows-console-mode=disable', f'--output-folder-name={os.environ['project']}',
+        os.environ['project']+'.py'
+    ]
+    subprocess.run(build_command)
+
     assets_path = Path("assets")
     def check_for_script(dlc_path: Path):
         for dirpath, dirnames, filenames in dlc_path.walk():
@@ -72,38 +77,34 @@ def build_task(logger: Logger):
                     return True
                 
         return False
-
-    # with tempfile.TemporaryDirectory() as modules_tmpdir:
-    #     (tmp_path := Path(modules_tmpdir) / 'assets').mkdir()
-    #     for dlc in dlcs:
-    #         dlc_path = assets_path / dlc
+    
+    with tempfile.TemporaryDirectory() as modules_tmpdir:
+        (tmp_path := Path(modules_tmpdir) / 'assets').mkdir()
+        for dlc in dlcs:
+            dlc_path = assets_path / dlc
             
-    #         if not check_for_script(dlc_path):
-    #             continue
+            if not check_for_script(dlc_path):
+                continue
             
-    #         (tmp_path / dlc).mkdir(parents=True)
-    #         make_module(logger, dlc, tmp_path, dlc_path)
-
-    #     build_command = [
-    #         'py', '-m', 'nuitka', '--remove-output',
-    #         '--deployment', '--standalone', f'--include-package-data={str(tmp_path)}', f'--output-dir={Path('dist') / os.environ['project']}',
-    #         os.environ['project']+'.py'
-    #     ]
-    #     subprocess.run(build_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            (tmp_path / dlc).mkdir(parents=True)
+            make_module(logger, dlc, tmp_path, dlc_path)
 
     logger.log_debug("Writing asset packs...")
 
     # Pack the game assets
     write_packs(logger)
 
+    shutil.rmtree(str(dist_path:=Path("dist", "testproj")))
+    Path("testproj.dist").rename(dist_path)
+
     logger.log_info("Game built successfully!")
 
 def build_game(*dynamic_libs):
     TaskScheduler.schedule_task(build_task)
 
-def write_packs(logger: Logger):
+def write_packs(logger: Logger, key: int):
     assets_path = Path("assets")
-    output_path = "dist" / Path(f"{os.environ["project"]}") / "data"
+    output_path = Path(f"{os.environ["project"]}.dist") / "data"
     output_path.mkdir(parents=True, exist_ok=True)
     dlcs: list[tuple[str, dict]] = [("edlc", {"root": "GhostEngine"})]
     with open(".rproj") as project_file:

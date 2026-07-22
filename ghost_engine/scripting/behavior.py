@@ -337,7 +337,6 @@ class Behavior:
     @NonOverrideable
     def destroy(self):
         Behavior.behavior_instances[type(self)].remove(self.__gameobject)
-        print(f"Destroying {self}")
 
 class EditorField:
     def __init__(self, field_type: type, default=None):

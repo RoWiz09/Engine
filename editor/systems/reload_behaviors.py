@@ -7,11 +7,14 @@ import importlib
 import sys
 
 def reload_behaviors():
+    modules.logger("RELOAD").log_info("Reloading Behaviors!")
     scene_manager = modules.scene_manager()
     for obj in scene_manager.game_objects:
         for idx, component in enumerate(obj.behaviors.copy()):
             component_module = type(component).__module__
             component_class = type(component).__name__
+
+            print(component_module, component_class)
 
             del sys.modules[component_module]
 
@@ -27,5 +30,7 @@ def reload_behaviors():
 
             new_class_inst = new_class_data.from_inst(component)
             obj.behaviors[idx] = new_class_inst
+
+    modules.logger("RELOAD").destroy()
                 
             

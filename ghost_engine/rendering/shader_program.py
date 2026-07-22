@@ -37,7 +37,6 @@ class ShaderProgram:
         self.fragment_src = fragment_src
         self.program_id = self._create_shader_program()
 
-
     def _create_shader_program(self):
         vertex_shader = glCreateShader(GL_VERTEX_SHADER)
         glShaderSource(vertex_shader, self.vertex_src)

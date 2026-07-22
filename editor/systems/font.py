@@ -1,4 +1,4 @@
-from PIL import Image, ImageFont, ImageDraw, ImageTransform
+from PIL import Image, ImageFont, ImageDraw
 from typing import Literal, TypeAlias
 
 from enum import Enum

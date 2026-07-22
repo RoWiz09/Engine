@@ -22,7 +22,7 @@ import colorama
 from enum import Enum
 from dataclasses import dataclass
 from pathlib import Path
-import os
+import os, subprocess
 
 from .reload_behaviors import reload_behaviors
 
@@ -400,6 +400,8 @@ class ConsoleWindow(EditorUiWindow):
             inst.add_data(data)
 
 class FileViewer(EditorUiWindow):
+    RBT_REPLACEMENTS = {"ClassName": None}
+
     name = "Files"
     def __init__(self):
         super().__init__()
@@ -412,13 +414,22 @@ class FileViewer(EditorUiWindow):
 
         self.selected_dir = Path("assets")
 
+        # Template files
+        self.script_templates: list[Path] = []
+        for dirpath, dirnames, filenames in self.selected_dir.walk():
+            for filename in filenames:
+                if filename.endswith(".rbt"):
+                    self.script_templates.append(dirpath / filename)
+
     def route_to(self, new_path: Path):
         self.selected_dir = new_path
         self.old = True
 
     async def build(self):
         self.ui_elements.clear()
-        Button(self, 100, 100, "Back", lambda: self.route_to(Path(os.sep.join(self.selected_dir.parts[:-1]))))
+        if self.selected_dir.parts[-1] != "assets":
+            Button(self, 100, 100, "Back", lambda: self.route_to(Path(os.sep.join(self.selected_dir.parts[:-1]))))
+
         for file in sorted(os.listdir(self.selected_dir), key=lambda x: (not (self.selected_dir / x).is_dir(), x.lower())):
             filepath = self.selected_dir / file
             # Exclude __pycache__ from directory list
@@ -432,24 +443,55 @@ class FileViewer(EditorUiWindow):
                 # Now we need to get the file type!
                 file_suffix = filepath.suffix
                 if file_suffix == ".py":
-                    Button(self, 100, 100, filepath.name, lambda f = filepath: os.system(f"code -r assets {str(f)}"))
+                    Button(self, 100, 100, filepath.name, lambda f = filepath: subprocess.run(f"code -r assets {str(f)}"))
 
                 elif file_suffix == ".rscene":
                     Button(self, 100, 100, filepath.name, lambda f = filepath: modules.scene_manager().load_scene_async(filepath.name.removesuffix(".rscene"), alert_scripts=False))
 
         self.update_max_scroll()
 
+    class FileTypes(Enum):
+        SCRIPT = 0
+
+    def create_file(self, filename: str, file_type: FileTypes, *args):
+        match file_type:
+            case self.FileTypes.SCRIPT:
+                behavior_name, template_id = args
+                self.RBT_REPLACEMENTS["ClassName"] = behavior_name
+
+                template: Path = self.script_templates[template_id]
+                template_data = template.read_text()
+                for key, value in self.RBT_REPLACEMENTS.items():
+                    template_data = template_data.replace(key, value)
+
+                path: Path = self.selected_dir / filename
+                path.write_text(template_data)
+
+                self.RBT_REPLACEMENTS["ClassName"] = None
+
     def open_new_file_subpopup(self, popup: Popup, button):
         subpopup = popup.open_subpopup(button)
-        Button(subpopup, 75, 20, "New Script", lambda: print("New Script Requested!"))
+        def open_new_script_subpopup(popup: Popup, button):
+            subpopup = popup.open_subpopup(button)
+
+            bn_ = InputField(subpopup, 120, 20, "Behavior Name", "empty_class")
+            fn_ = InputField(subpopup, 120, 20, "File Name", "empty_behavior.py")
+
+            button = Button(subpopup, 120, 20, "Create", None)
+            button.click_callback = lambda bn=bn_, fn=fn_: self.create_file(fn.get_value(), self.FileTypes.SCRIPT, bn.get_value(), 0)
+
+        button = Button(subpopup, 100, 20, "New Behavior", None)
+        button.click_callback = lambda p=subpopup, b=button: open_new_script_subpopup(p, b)
 
     def handle_input(self, key_codes, mouse_buttons, input_handler):
         if input_handler.get_mouse_button_down(mouse_buttons.RIGHT):
-            popup = open_popup(glm.vec2(input_handler.mouse_pos))
-            button = Button(popup, 75, 20, "New File...", None)
-            button.click_callback = lambda p=popup, b=button: self.open_new_file_subpopup(p, b)
-            button = Button(popup, 75, 20, "Reload", reload_behaviors)
-            popup.register()
+            if self.selected_dir.parts[-1] != "assets":
+                popup = open_popup(glm.vec2(input_handler.mouse_pos))
+                button = Button(popup, 90, 20, "New File", None)
+                button.click_callback = lambda p=popup, b=button: self.open_new_file_subpopup(p, b)
+                button = Button(popup, 90, 20, "New Directory", None)
+                button = Button(popup, 90, 20, "Reload", reload_behaviors)
+                popup.register()
 
         return super().handle_input(key_codes, mouse_buttons, input_handler)
 

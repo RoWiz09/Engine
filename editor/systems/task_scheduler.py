@@ -9,12 +9,13 @@ else:
     Logger: TypeAlias = Any
 
 from concurrent.futures import ProcessPoolExecutor, Future
-from collections import deque
+
 from . import global_vars
 
 from queue import Empty
 
 import os, multiprocessing
+import heapq
 import time
 import enum
 
@@ -42,7 +43,7 @@ class TaskLog:
 
 class TaskStates(enum.IntEnum):
     QUEUED = 0
-    STARTED = 1
+    RUNNING = 1
     COMPLETE = 2
     FAILED = 3
 
@@ -80,7 +81,7 @@ class TaskScheduler:
             return
         TaskScheduler.INITALIZED = True
 
-        self.queue: deque[Task] = deque()
+        self.queue: list[tuple[int, Task]] = []
         self.__executor = ProcessPoolExecutor(max_workers=global_vars.ARGS.task_limit)
         self.__active_tasks: list[ActiveTask] = []
 
@@ -88,9 +89,15 @@ class TaskScheduler:
         self.manager = multiprocessing.Manager()
 
     @classmethod
-    def schedule_task(cls, method: Callable[[Logger], Any], *args, **kwds):
+    def schedule_task(cls, method: Callable[[Logger], Any], args: tuple = (), kwds: dict = {}, priority: int = 0):
+        if not isinstance(args, tuple):
+            cls.INSTANCE.logger.log_error(f"Task args must be a tuple, not a(n) {type(args)}")
+
+        if not isinstance(kwds, dict):
+            cls.INSTANCE.logger.log_error(f"Task kwds must be a dictionary, not a(n) {type(args)}")
+
         task_info = Task(TaskStates.QUEUED, None, method, args, kwds)
-        cls.INSTANCE.queue.append(task_info)
+        heapq.heappush(cls.INSTANCE.queue, (-priority, task_info))
         return task_info
 
     @staticmethod
@@ -130,6 +137,7 @@ An engine task raised a {type(e).__name__} exception!
                     continue
 
                 self.logger.log_debug(f"Task {proc.name} finished sucessfully!")
+                proc.logger.destroy()
 
             else:
                 remaining.append(proc)
@@ -137,13 +145,13 @@ An engine task raised a {type(e).__name__} exception!
         self.__active_tasks = remaining
 
         while len(self.__active_tasks) < global_vars.ARGS.task_limit and len(self.queue) > 0:
-            taskinfo = self.queue.popleft()
+            _, task = heapq.heappop(self.queue)
 
-            logger_name = taskinfo.func.__name__.replace("_", " ").upper()
+            logger_name = task.func.__name__.replace("_", " ").upper()
             logger = global_vars.logger(logger_name, logger_replacement=TaskLog(self.get_queue()))
             logger.configure_logger(log_to_console = False, file_formatting = True)
 
-            task_process = self.__executor.submit(taskinfo.func, logger, *taskinfo.args, **taskinfo.kwds)
-            self.__active_tasks.append(ActiveTask(taskinfo, task_process, logger, logger_name.title(), time.time()))
+            task_process = self.__executor.submit(task.func, logger, *task.args, **task.kwds)
+            self.__active_tasks.append(ActiveTask(task, task_process, logger, logger_name.title(), time.time()))
 
-            taskinfo.state = TaskStates.STARTED
+            task.state = TaskStates.RUNNING

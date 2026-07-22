@@ -5,6 +5,9 @@ from ..error_codes import ErrorCodes
 from typing import TypeAlias
 from pathlib import Path
 
+import importlib.machinery
+import importlib.util
+
 import dataclasses
 import hashlib
 import struct
@@ -223,49 +226,6 @@ class Pack:
             self.sections.add(header)
 
         Pack._initalized = True
-
-        # Behavior loading
-        behavior_globals = {}
-        self.behavior_globals = behavior_globals
-
-        self.module_to_path = lambda m: Path(*m.split("."))
-        def get_behavior_data(module: str, globals={}, locals=None, fromlist=(), level=0) -> types.ModuleType:
-            Logger("PACK BEHAVIORS").write_to_log(f"""
-Importing {module}
-- With Fromlist: {fromlist}
-- At Level     : {level}
-""", LoggingLevels.DEBUG)
-            if level == 0 and not module.startswith("assets"):
-                return __import__(module, globals, locals, fromlist, level)
-
-            module = ".".join(submodule[:len(submodule)-(level-1)]) + "." + module if len(submodule:=globals.get("__package__", "").split(".")) > 0 else module
-
-            if module in sys.modules:
-                Logger("PACK BEHAVIORS").write_to_log(f"""
-Importing already initalized module: {module}
-- With Fromlist: {fromlist}
-""")
-                return sys.modules[module]
-            
-            file_path = self.module_to_path(module)
-            data = self.file_links[suffixed_path:=file_path.with_suffix(".py")].read_file(suffixed_path)
-
-            behavior_module = types.ModuleType(module)
-            behavior_module.__package__ = ".".join(module.split(".")[:-1])
-
-            import builtins
-            behavior_module_builtins = builtins.__dict__.copy()
-            behavior_module_builtins["__import__"] = get_behavior_data
-            behavior_module.__dict__["__builtins__"] = behavior_module_builtins
-
-            sys.modules[module] = behavior_module
-
-            compiled_code = compile(data, file_path, "exec")
-            exec(compiled_code, behavior_module.__dict__)
-
-            return behavior_module
-        
-        self.__get_behavior_data = get_behavior_data
         
     @property
     def files(self):
@@ -311,14 +271,38 @@ Importing already initalized module: {module}
         data = self.file_links[file_path].read_file(file_path)
         return json.loads(data.decode())
     
+    def __load_package(self, name: str):
+        package_module = types.ModuleType(name)
 
-    def load_behavior(self, module: str, behavior_class: str):
-        if not module in sys.modules:
-            module_data = self.__get_behavior_data(module)
-        else:
-            module_data = sys.modules[module]
+        package_module.__path__ = []
+        package_module.__package__ = name
+        package_module.__file__ = name + ".pyd"
 
-        if hasattr(module_data, behavior_class):
-            return getattr(module_data, behavior_class)
+        loader = importlib.machinery.ExtensionFileLoader(name, name + ".pyd")
+        spec = importlib.util.spec_from_loader(name, loader)
+
+        package_module.__spec__ = spec
+        sys.modules[name] = package_module
+
+        try: 
+            loader.exec_module(package_module)
+
+        except Exception as e:
+            self.logger.write_to_log("An error occured while loading a package!\n" \
+            f"- Raised: {e}")
+            self.logger.log_fatal(f"An error occured while loading a package!")
+        
+        return package_module
+
+    def load_behavior(self, module_path: str, behavior_class: str):
+        segments = module_path.split(".")
+        name = segments[1]
+
+        if not name in sys.modules:
+            package = self.__load_package(name)
         else:
-            Logger("PACK BEHAVIORS").log_fatal(f"{module} is missing requested class {behavior_class}")
+            package = sys.modules[name]
+        
+        print(package.__dict__)
+        module = getattr(package, behavior_class)
+        

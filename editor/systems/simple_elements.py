@@ -283,6 +283,9 @@ class InputField(UiElement):
         self.parent.focused_elem = None
         self.hold_focus = False
 
+        if self.message == "":
+            self.message = str(self.default_val)
+
         if self.type_:
             self.message = str(self.type_(self.message))
             self.old = True

@@ -10,16 +10,14 @@ class Settings:
 
     def __init__(self, file_name:str="settings.rconfig"):
         self._file_name = file_name
-        config_file = open(Settings.base / file_name, "r")
-
         self.settings = {}
 
-        for line in config_file.read().splitlines():
+        (Settings.base / file_name).touch()
+
+        for line in (Settings.base / file_name).read_text().splitlines():
             key, value = line.split(",")
 
             self.settings[key] = value
-
-        config_file.close()
 
     @overload
     def get_setting(self, key:str) -> str:

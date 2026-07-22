@@ -3,6 +3,9 @@
     "dlc":{
         "dlc0": {
             "root": "testproj",
+            "rules": [
+                "--no-pyi-file"
+            ],
             "exclude": []
         }
     }

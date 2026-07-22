@@ -58,9 +58,6 @@ class Rigidbody(Behavior, PhysicsBehavior):
 
     def on_collision_start(self, other):
         self.handle_collision(other, True)
-        
-    # def on_collision(self, other):
-    #     self.handle_collision(other)
 
     def on_collision_exit(self, other):
         self.grounded = False

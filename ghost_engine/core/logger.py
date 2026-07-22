@@ -56,6 +56,9 @@ class Logger:
         return cls._instances[logger_name]
 
     def __init__(self, logger_name: str, **kwargs):
+        if hasattr(self, "initalized"):
+            return
+        
         global log_to_console, logging_level
 
         self.logger_name = logger_name
@@ -65,6 +68,8 @@ class Logger:
 
         self.logging_level = kwargs.pop("logging_level", logging_level)
         self.log_to_console = kwargs.pop("log_to_console", log_to_console)
+
+        self.initalized = True
 
     def _write(self, level: LoggingLevels, style: str, label: str, msg: str, override: bool):        
         if self.logging_level.value <= level.value or override:
@@ -111,6 +116,9 @@ class Logger:
 
         if len(kwargs) > 0:
             raise ValueError(f"Logger.configure_logger recived unexpected keyword arguments: {", ".join(kwargs.keys())}")
+    
+    def destroy(self):
+        del Logger._instances[self.logger_name]
 
     @classmethod
     def _reconstruct(cls, logger_name, kwargs_dict):
