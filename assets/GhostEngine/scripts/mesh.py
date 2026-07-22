@@ -57,5 +57,8 @@ class Mesh(Behavior, RenderBehavior):
             mesh.render()
     
     @classmethod
-    def create_from_builder(cls, mesh_builder: MeshBuilder):
-        mesh_builder
+    def create_from_builder(cls, mesh_builder: MeshBuilder, gameobject: GameObject):
+        inst = cls(gameobject)
+        inst.submeshes[mesh_builder.build_mesh()] = Material.DEFAULT
+
+        return inst
