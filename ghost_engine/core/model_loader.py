@@ -30,7 +30,7 @@ class ModelLoader:
 
         for line in lines:
             if line.startswith("o "):
-                if not vertices is []:
+                if vertices != []:
                     add_mesh(vertices, indices)
 
                 pos_offset = len(positions)
@@ -91,5 +91,4 @@ class ModelLoader:
                         indices.append(vertex_map[key])
 
         add_mesh(vertices, indices)
-        print(meshes)
         return meshes
