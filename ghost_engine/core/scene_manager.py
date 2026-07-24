@@ -299,7 +299,7 @@ class SceneManager:
                         self.active_camera = behavior
 
                     obj_scripts.add(behavior)
-                    behavior.post_init()
+                    behavior.load()
                         
                 else:
                     Logger("CORE").log_warning(

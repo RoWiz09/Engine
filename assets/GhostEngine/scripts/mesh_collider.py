@@ -47,7 +47,7 @@ class MeshCollider(Behavior, ColliderType):
         self.__last_mesh_verts = self.mesh_verts.copy()
         self.__last_transform_state = gameobject.transform.copy_state()
 
-    def post_init(self):
+    def load(self):
         self.mesh = Model(self.mesh)
         print(self.mesh)
         path = Path(self.mesh.get_value())

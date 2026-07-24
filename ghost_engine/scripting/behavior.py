@@ -189,7 +189,6 @@ class RenderBehavior:
 class Behavior:
     """
     The basic class all game scripts are required to inherit from. Implements events for:
-    - `__init__`: Class initalization. 
     - `update`: Called every 'update', or 'tick', during the game's runtime.
     - `fixed_update`: Called ~50 times every second, typically used for physics.
     - `on_frame` (`_start` / `_end`): Called at the start or end of a frame, respectively.
@@ -239,7 +238,10 @@ class Behavior:
 
         self.behavior_instances[type(self)].add(gameobject)
 
-    def post_init(self):
+    def load(self):
+        """
+            Called after all varibles have been assigned by the SceneManager.
+        """
         pass
 
     @property

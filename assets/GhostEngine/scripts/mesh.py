@@ -31,7 +31,7 @@ class Mesh(Behavior, RenderBehavior):
 
         self.submeshes: dict[MeshBuilder.Mesh, Material] = {}
 
-    def post_init(self):
+    def load(self):
         self.mesh_path = Model(self.mesh_path)
         for mesh in ModelLoader.load_obj(self.mesh_path.get_value()):
             self.submeshes[mesh] = Material.DEFAULT
