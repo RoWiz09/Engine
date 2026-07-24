@@ -36,6 +36,8 @@ class Mesh(Behavior, RenderBehavior):
         for mesh in ModelLoader.load_obj(file_path):
             inst.submeshes[mesh] = Material.DEFAULT
 
+        inst.mesh_path = file_path
+
         return inst
     
     @register_editor_button
@@ -60,5 +62,7 @@ class Mesh(Behavior, RenderBehavior):
     def create_from_builder(cls, mesh_builder: MeshBuilder, gameobject: GameObject):
         inst = cls(gameobject)
         inst.submeshes[mesh_builder.build_mesh()] = Material.DEFAULT
+
+        del inst.mesh_path
 
         return inst
