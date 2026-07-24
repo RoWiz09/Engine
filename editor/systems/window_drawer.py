@@ -243,6 +243,10 @@ class EditorUiWindow:
         if self.SHOW_TITLE:
             self.name_texture = gl.glGenTextures(1)
 
+        self.menu_bar = None
+        self.sidebar: list[UiElement] = None
+        self.sidebar_width_ratio = 1/5
+
         self.build_sprite()
         self.rebuild_texture()
 
@@ -287,6 +291,11 @@ class EditorUiWindow:
         img_drawer.rectangle((0, 0, width-1, height-1), outline=edge, fill=center, width=2)
         img_drawer.rectangle((2, height - 24, width-3, height-3), fill=top_bar, width=2)
         img_drawer.line((2, height - 24, width-3, height - 24), fill=inset, width=2)
+
+        if not self.sidebar is None:
+            x = self.draw_data.size.x * self.sidebar_width_ratio
+            img_drawer.line((x, height - 24, x, 2), fill=inset, width = 2)
+
         del img_drawer
 
         self.sprite = img
@@ -329,7 +338,7 @@ class EditorUiWindow:
         top_offset = BASE_OFFSET if self.SHOW_TITLE else 0
 
         self.stencil_topleft = glm.vec2(
-            self.rect.left + self.draw_data.padding.x,
+            self.rect.left + self.draw_data.padding.x + (0 if self.sidebar is None else self.draw_data.size.x * self.sidebar_width_ratio),
             self.rect.top + self.draw_data.padding.y + top_offset
         )
 
@@ -415,6 +424,24 @@ class EditorUiWindow:
 
             gl.glBindTexture(gl.GL_TEXTURE_2D, 0)
 
+        # Pos calculation
+        pos = self.draw_data.pos + self.draw_data.padding
+        if self.SHOW_TITLE:
+            pos.y += BASE_OFFSET - self.scroll
+        else:
+            pos.y -= self.scroll
+
+        pos_off = glm.vec2(0, 0)
+        if not self.sidebar is None:
+            tmp_pos = glm.vec2(pos)
+            for obj in self.sidebar:
+                if obj.size.x != self.draw_data.size.x * self.sidebar_width_ratio - (self.draw_data.padding.x * 2):
+                    obj.resize(glm.vec2(self.draw_data.size.x * self.sidebar_width_ratio - (self.draw_data.padding.x * 2), obj.size.y))
+                obj.draw(editor, tmp_pos)
+                tmp_pos.y += obj.get_height() + self.draw_data.padding.y
+
+            pos_off.x = self.draw_data.size.x * self.sidebar_width_ratio
+
         # Create a stencil before element rendering
         WINDOW_SHADER.set_mat4("uModel", self.stencil_model)
         gl.glEnable(gl.GL_STENCIL_TEST)
@@ -429,41 +456,26 @@ class EditorUiWindow:
         gl.glStencilFunc(gl.GL_EQUAL, 1, 0xFF)
         gl.glStencilOp(gl.GL_KEEP, gl.GL_KEEP, gl.GL_KEEP)
 
-        # Child Elements
-        pos = self.draw_data.pos + self.draw_data.padding
-        if self.SHOW_TITLE:
-            pos.y += BASE_OFFSET - self.scroll
-        else:
-            pos.y -= self.scroll
-
-        # def get_element_in_window(elem: UiElement):
-        #     stencil_bottomright = self.stencil_topleft + self.stencil_size
-        #     if pos.y > stencil_bottomright.y or pos.x > stencil_bottomright.x: return False
-        #     if pos.y + elem.get_height() < self.stencil_topleft.y or pos.x + child.size.x < self.stencil_topleft.x: return False
-        #     else: return True
-
         cur_row_height = 0
-        start_pos_x = pos.x
+        original_pos_x = pos.x
         with self.list_lock:
             for child in self.ui_elements:
-                if child.shown: # and get_element_in_window(child):
-                    next_pos = glm.vec2(*pos)
-                    if self.layout_mode == LayoutMode.VERTICAL:
-                        next_pos.y += child.get_height() + self.draw_data.padding.y
+                if not child.shown:
+                    continue
 
-                    elif self.layout_mode == LayoutMode.HORIZONTAL:
-                        cur_row_height = max(cur_row_height, child.size.y)
-                        next_pos.x += child.size.x
+                if self.layout_mode == LayoutMode.VERTICAL:
+                    child.draw(editor, pos + pos_off)
+                    pos.y += child.get_height() + self.draw_data.padding.y
 
-                        if next_pos.x >= (self.stencil_size.x):
-                            pos.x = start_pos_x
-                            pos.y += cur_row_height + self.draw_data.padding.y
-                            cur_row_height = 0
+                elif self.layout_mode == LayoutMode.HORIZONTAL:
+                    if pos.x + child.size.x >= self.stencil_size.x:
+                        pos.x = original_pos_x
+                        pos.y += cur_row_height + self.draw_data.padding.y
+                        cur_row_height = 0
 
-                        next_pos.x += self.draw_data.padding.x
-
-                    child.draw(editor, pos)
-                    pos = next_pos
+                    child.draw(editor, pos + pos_off)
+                    cur_row_height = max(cur_row_height, child.get_height())
+                    pos.x += child.size.x + self.draw_data.padding.x
 
         gl.glClearStencil(0)
         gl.glClear(gl.GL_STENCIL_BUFFER_BIT)
@@ -474,6 +486,12 @@ class EditorUiWindow:
         global HELD_DRAG_DATA
         if not self.focused_elem and HELD_DRAG_DATA and input_handler.get_mouse_button_up(mouse_buttons.LEFT):
             HELD_DRAG_DATA = None
+
+        if not self.sidebar is None:
+            for elem in self.sidebar:
+                if elem.rect.collide_point(glm.vec2(*input_handler.mouse_pos)):
+                    elem.focus()
+                    self.focused_elem = weakref.ref(elem)
         
         if self.focused_elem and self.focused_elem():
             elem = self.focused_elem()

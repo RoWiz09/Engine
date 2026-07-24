@@ -438,8 +438,6 @@ class FileViewer(EditorUiWindow):
         self.layout_mode = LayoutMode.HORIZONTAL
         self.draw_data.padding.x = 10
         self.draw_data.padding.y = 10
-        self.regen_stencil()
-
         self.old = True
 
         self.selected_dir = Path("assets")
@@ -450,6 +448,14 @@ class FileViewer(EditorUiWindow):
             for filename in filenames:
                 if filename.endswith(".rbt"):
                     self.script_templates.append(dirpath / filename)
+
+        self.sidebar = []
+        for pkg in sorted(self.selected_dir.iterdir(), key=lambda p: p.name == "GhostEngine"):
+            self.sidebar.append(Button(None, 75, 20, pkg.name, lambda pkg_=pkg: self.route_to(pkg_)))
+
+        self.build_sprite()
+        self.rebuild_texture()
+        self.regen_stencil()
 
     def route_to(self, new_path: Path):
         self.selected_dir = new_path
@@ -473,10 +479,10 @@ class FileViewer(EditorUiWindow):
                 # Now we need to get the file type!
                 file_suffix = filepath.suffix
                 if file_suffix == ".py":
-                    Button(self, 100, 100, filepath.name, lambda f = filepath: subprocess.run(f"code -r assets {str(f)}"))
+                    Button(self, 100, 100, filepath.name, lambda f = filepath.absolute(): subprocess.run(["code", "-r", "assets", str(f)], shell=True))
 
                 elif file_suffix == ".rscene":
-                    Button(self, 100, 100, filepath.name, lambda f = filepath: modules.scene_manager().load_scene_async(filepath.name.removesuffix(".rscene"), alert_scripts=False))
+                    Button(self, 100, 100, filepath.name, lambda f = filepath: modules.scene_manager().load_scene_async(f.name.removesuffix(".rscene"), alert_scripts=False))
 
                 else:
                     button = Button(self, 100, 100, filepath.name, None)
