@@ -11,7 +11,7 @@ import json
 if __name__ == "__main__":
     from systems.editor_camera import editor_camera
 
-    from systems.window_drawer import WindowDrawer
+    from systems.window_drawer import WindowDrawer, EditorUiWindow
     from systems.window_docker import *
     from systems.editor_windows import *
 
@@ -152,14 +152,22 @@ class Window:
         self.__task_scheduler__ = TaskScheduler()
 
     def setup_root_menu_bar(self):
-        self.drawer.top_bar.add_menu("File")
+        menu_bar = self.drawer.top_bar
+        menu_bar.add_menu("File")
 
-        self.drawer.top_bar.add_to_menu("File", Button(None, 100, 15, "Save", self.save))
-        self.drawer.top_bar.add_to_menu("File", Button(None, 100, 15, "Close", None))
-        self.drawer.top_bar.add_to_menu("File", HorizontalLine(None, width=100))
-        self.drawer.top_bar.add_to_menu("File", Button(None, 100, 15, "Build", build_game))
-        self.drawer.top_bar.add_to_menu("File", HorizontalLine(None, width=100))
-        self.drawer.top_bar.add_to_menu("File", Button(None, 100, 15, "Close", None))
+        menu_bar.add_to_menu("File", Button(None, 100, 15, "Save", self.save))
+        menu_bar.add_to_menu("File", HorizontalLine(None, width=100))
+        menu_bar.add_to_menu("File", Button(None, 100, 15, "Build", build_game))
+        menu_bar.add_to_menu("File", HorizontalLine(None, width=100))
+        menu_bar.add_to_menu("File", Button(None, 100, 15, "Close", None))
+
+        menu_bar.add_menu("Window")
+
+        for window in EditorUiWindow.window_types:
+            if not window.SHOW_IN_WINDOW_MENU:
+                continue
+
+            menu_bar.add_to_menu("Window", Button(None, 100, 15, window.name, lambda win=window: self.drawer.add_window_data(win())))
 
     def should_close(self):
         return glfw.window_should_close(self.window)
@@ -295,6 +303,10 @@ class Window:
             field = getattr(component, variable)
             if isinstance(field, (str, int, list, float, bool, dict)):
                 return field
+            
+            if issubclass(type(field), global_vars.engine_data_type):
+                return field.get_value()
+            
             if check_iterable(field):
                 return list(field)
 
@@ -318,23 +330,14 @@ class Window:
             base["material"] = material
 
             for component in obj.behaviors:
-                if component.init_method is None:
-                    base["components"].append({
-                        "module": type(component).__module__,
-                        "class": type(component).__name__,
-                        "vars": {}
-                    })
-                    for var, field in vars(type(component)).items():
-                        if isinstance(field, global_vars.editor_field):
-                            base["components"][-1]["vars"][var] = json_serialize(component, var)
-                else:
-                    base["components"].append({
-                        "module": type(component).__module__,
-                        "class": type(component).__name__,
-                        "vars": [
-                            *component.init_vars
-                        ]
-                    })
+                base["components"].append({
+                    "module": type(component).__module__,
+                    "class": type(component).__name__,
+                    "vars": {}
+                })
+                for var, field in vars(type(component)).items():
+                    if isinstance(field, global_vars.editor_field):
+                        base["components"][-1]["vars"][var] = json_serialize(component, var)
 
             if children != {}:
                 for child, children in children.items():

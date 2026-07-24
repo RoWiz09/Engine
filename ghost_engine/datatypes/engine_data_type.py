@@ -12,7 +12,9 @@ class DisplayMethods(Enum):
     VEC3_INPUT = 101
 
     # OTHER [200-INF)
-    COLOR = 200
+    DROP_FIELD = 200
+    TYPEABLE_DROP_FIELD = 201
+    COLOR = 202
 
 class DataType:
     """
@@ -34,3 +36,13 @@ class DataType:
         """
             Filters what can be put into the field. Return True to allow input, False to deny.
         """
+
+    def set_value(self, value):
+        return self.filter_input(value)
+
+    def get_value(self):
+        pass
+
+    @classmethod
+    def empty(cls):
+        return cls()

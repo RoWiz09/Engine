@@ -290,21 +290,16 @@ class SceneManager:
                 vars_data: dict = comp_data.get("vars", {})
 
                 if issubclass(cls, Behavior):
-                    if cls.init_method is None:
-                        behavior = cls(obj)
-                        for var_name, value in vars_data.items():
-                            setattr(behavior, var_name, value)
-                        behavior.enabled = comp_data.get("active", True)
+                    behavior = cls(obj)
+                    for var_name, value in vars_data.items():
+                        setattr(behavior, var_name, value)
+                    behavior.enabled = comp_data.get("active", True)
 
-                        if not self.active_camera and issubclass(type(behavior), CamType):
-                            self.active_camera = behavior
-
-                    else:
-                        behavior = cls.init_method(*vars_data, obj)
-
-                        behavior.enabled = comp_data.get("active", True)
+                    if not self.active_camera and issubclass(type(behavior), CamType):
+                        self.active_camera = behavior
 
                     obj_scripts.add(behavior)
+                    behavior.post_init()
                         
                 else:
                     Logger("CORE").log_warning(

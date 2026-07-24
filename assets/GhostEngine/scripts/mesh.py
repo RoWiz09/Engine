@@ -1,6 +1,7 @@
 from __future__ import annotations
-from ghost_engine.scripting.behavior import Behavior, RenderBehavior, EditorField, InitMethod, register_editor_button
+from ghost_engine.scripting.behavior import Behavior, RenderBehavior, EditorField, RegisterEditorButton
 
+from ghost_engine.datatypes.model_type import Model
 from ghost_engine.core.model_loader import ModelLoader
 from ghost_engine.mesh_builder import MeshBuilder
 
@@ -21,7 +22,7 @@ class Mesh(Behavior, RenderBehavior):
     # Class-level registry for shared mesh data
     _mesh_registry = {}
 
-    mesh_path = EditorField(str, "")
+    mesh_path = EditorField(Model, Model.empty())
 
     run_in_editor = True
 
@@ -30,23 +31,17 @@ class Mesh(Behavior, RenderBehavior):
 
         self.submeshes: dict[MeshBuilder.Mesh, Material] = {}
 
-    @InitMethod
-    def create_from_obj(cls: type[Mesh], file_path: str, game_object: GameObject):
-        inst = cls(game_object)
-        for mesh in ModelLoader.load_obj(file_path):
-            inst.submeshes[mesh] = Material.DEFAULT
+    def post_init(self):
+        self.mesh_path = Model(self.mesh_path)
+        for mesh in ModelLoader.load_obj(self.mesh_path.get_value()):
+            self.submeshes[mesh] = Material.DEFAULT
 
-        inst.mesh_path = file_path
-
-        return inst
     
-    @register_editor_button
+    @RegisterEditorButton
     def refresh(self):
-        self.reload_obj(self.mesh_path)
-
-    @create_from_obj.refresh_vars
-    def reload_obj(self, file_path: str):
-        self.submeshes = ModelLoader.load_obj(file_path)
+        self.submeshes.clear()
+        for mesh in ModelLoader.load_obj(self.mesh_path.get_value()):
+            self.submeshes[mesh] = Material.DEFAULT
     
     def on_render(self):
         if not self.enabled:

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from ghost_engine.datatypes.model_type import Model
 
-from ghost_engine.scripting.behavior import Behavior, EditorField, InitMethod, PhysicsBehavior
+from ghost_engine.scripting.behavior import Behavior, EditorField, PhysicsBehavior
 from ghost_engine.scripting.collider_type import ColliderType, CollisionInfo
 
 from ghost_engine.object import GameObject
@@ -37,7 +37,7 @@ class EPAOutput:
 
 MAX_ITERS = 25
 class MeshCollider(Behavior, ColliderType):
-    mesh = EditorField(Model, "")
+    mesh = EditorField(Model, Model.empty())
 
     def __init__(self, gameobject):
         super().__init__(gameobject)
@@ -46,25 +46,11 @@ class MeshCollider(Behavior, ColliderType):
 
         self.__last_mesh_verts = self.mesh_verts.copy()
         self.__last_transform_state = gameobject.transform.copy_state()
-    
-    @property
-    def needs_update(self):
-        return (
-            self.__last_transform_state != self.gameobject.transform.copy_state() or
-            self.__last_mesh_verts != self.mesh_verts
-        ) and self.mesh_verts != []
 
-    @InitMethod
-    def create_mesh_collider(cls: type[MeshCollider], file_path: str, game_object: GameObject):
-        inst = cls(game_object)
-        inst.load(file_path)
-
-        return inst
-
-    @create_mesh_collider.refresh_vars
-    def load(self, file_path):
-        self.mesh = file_path
-        path = Path(file_path)
+    def post_init(self):
+        self.mesh = Model(self.mesh)
+        print(self.mesh)
+        path = Path(self.mesh.get_value())
         
         data = Pack().get_contents(path)
         lines = data.splitlines()
@@ -79,6 +65,13 @@ class MeshCollider(Behavior, ColliderType):
             verts.append(point)
 
         self.mesh_verts = verts
+
+    @property
+    def needs_update(self):
+        return (
+            self.__last_transform_state != self.gameobject.transform.copy_state() or
+            self.__last_mesh_verts != self.mesh_verts
+        ) and self.mesh_verts != []
 
     def center(self):
         min_max_x = [INFINITY, -INFINITY]

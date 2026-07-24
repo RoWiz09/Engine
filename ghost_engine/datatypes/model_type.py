@@ -23,6 +23,13 @@ class Model(DataType):
         
         else:
             return False
+
+    def set_value(self, value):
+        if super().set_value(value):
+            self.path = value
+
+    def get_value(self):
+        return self.path
         
     def __str__(self):
         return self.path
