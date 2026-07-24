@@ -14,6 +14,7 @@ from .console import ConsoleLogger
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ghost_engine.object import GameObject
+    from ghost_engine.datatypes.engine_data_type import DataType
 
 import sys, math
 import asyncio
@@ -23,6 +24,7 @@ from enum import Enum
 from dataclasses import dataclass
 from pathlib import Path
 import os, subprocess
+from pyglm import glm
 
 from .reload_behaviors import reload_behaviors
 
@@ -83,6 +85,7 @@ class Inspector(EditorUiWindow):
 
         self.draw_data.padding.x = 10
         self.draw_data.padding.y = 5
+        self.regen_stencil()
 
         self.locked = False
         
@@ -148,6 +151,8 @@ class Inspector(EditorUiWindow):
 
         HorizontalLine(self)
 
+        format_name = lambda f: func.__name__.replace("_", " ").title()
+
         for component in data.behaviors:
             comp_class = type(component)
             TextElement(self, comp_class.__name__, self.renderable_width, 30)
@@ -159,17 +164,38 @@ class Inspector(EditorUiWindow):
                         build_vec3_input(self, var)
 
                     elif var_data.type == float:
-                        input_field = InputField(self, self.renderable_width, 20, var_name, str(var), float)
+                        input_field = LabeledInput(self, self.renderable_width, 20, var_name, str(var), float)
                         input_field.command = lambda f, c=component, s=var_name: setattr(c, s, f.get_value() if f.get_value() else 1.0)
                         input_field.validate_command = InputField.validate_float
 
                     elif var_data.type == str:
-                        InputField(self, self.renderable_width, 20, var_name, var, str)
+                        input_field = LabeledInput(self, self.renderable_width, 20, var_name, var, str)
+                        input_field.command = lambda f, c=component, s=var_name: setattr(c, s, f.get_value())
                     
                     elif var_data.type == bool:
-                        LabeledCheckbox(self, self.renderable_width, 20, var_name, var)
+                        checkbox = LabeledCheckbox(self, self.renderable_width, 20, var_name, var)
+                        checkbox.command = lambda f, c=component, s=var_name: setattr(c, s, f.get_value())
+
+                    elif issubclass(var_data.type, global_vars.engine_data_type):
+                        if TYPE_CHECKING:
+                            var: DataType
+
+                        disp_type, val = var.display()
+                        if disp_type == global_vars.engine_display_methods.DROP_FIELD:
+                            field = DropField(self, self.renderable_width, 20, var_name, DragData(val, str(val)))
+                            field.filter_ = lambda f, v=var: v.filter_input(f.object_data)
+                            field.drop_callback = lambda f, v=var: v.set_value(f.get_value().object_data)
+
+            for owner, funcs in component.editor_button_registry.items():
+                if not isinstance(component, owner):
+                    continue
+
+                for func in funcs:
+                    Button(self, self.renderable_width, 20, format_name(func), lambda f=func, c=component: f(c))
         
             HorizontalLine(self)
+
+        Button(self, self.renderable_width, 20, "Add Behavior", None)
 
     async def build(self, data):
         self.scroll = 0.0
@@ -188,8 +214,6 @@ class Inspector(EditorUiWindow):
             cls.object_type = getattr(sys.modules["ghost_engine.object"], "GameObject")
 
         for inst in cls.instances:
-            inst: Inspector
-
             asyncio.run(inst.build(data))
 
 class Hierarchy(EditorUiWindow):
@@ -200,6 +224,7 @@ class Hierarchy(EditorUiWindow):
 
         self.draw_data.padding.x = 5
         self.draw_data.padding.y = 5
+        self.regen_stencil()
 
         self.manager = global_vars.scene_manager()
         self.object_buttons: set[Button] = set()
@@ -269,7 +294,10 @@ class Scenes(EditorUiWindow):
     def __init__(self):
         super().__init__()
         self.scene_manager = global_vars.scene_manager()
+
         self.draw_data.padding = glm.vec2(10, 10)
+        self.regen_stencil()
+
         self.list_view = ListView(self, self.renderable_width, self.renderable_height, self.scene_manager.scenes)
         self.list_view.select_item_callback = self.select_scene_callback
 
@@ -335,6 +363,7 @@ class ConsoleWindow(EditorUiWindow):
 
         self.draw_data.padding.x = 10
         self.draw_data.padding.y = 10
+        self.regen_stencil()
 
     @staticmethod
     def hex_to_decimal_list(hex_: str):
@@ -409,6 +438,7 @@ class FileViewer(EditorUiWindow):
         self.layout_mode = LayoutMode.HORIZONTAL
         self.draw_data.padding.x = 10
         self.draw_data.padding.y = 10
+        self.regen_stencil()
 
         self.old = True
 
@@ -447,6 +477,10 @@ class FileViewer(EditorUiWindow):
 
                 elif file_suffix == ".rscene":
                     Button(self, 100, 100, filepath.name, lambda f = filepath: modules.scene_manager().load_scene_async(filepath.name.removesuffix(".rscene"), alert_scripts=False))
+
+                else:
+                    button = Button(self, 100, 100, filepath.name, None)
+                    button.draggable_data = DragData(str(filepath), str(filepath))
 
         self.update_max_scroll()
 

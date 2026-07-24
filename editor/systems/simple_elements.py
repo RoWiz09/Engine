@@ -35,8 +35,8 @@ class TextElement(UiElement):
         self.style = TextStyle.NORMAL
         self.anchor: AnchorPoints = "mm"
         self.text_draw_anchor: TextRenderAnchor = TextRenderAnchor.middle_middle
-        self.old = False
 
+        self.use_wrapping = True
         self.color = (255, 255, 255)
 
         self.text_size = None
@@ -76,7 +76,7 @@ class TextElement(UiElement):
             offset.y + self.edge_offset[1]
 
         return render_text(self.message, int(self.size.x), int(self.size.y), 
-                              int(offset.x), int(offset.y), self.style, self.anchor, self.text_size, color=self.color)
+                              int(offset.x), int(offset.y), self.style, self.anchor, self.text_size, color=self.color, enable_wrapping=self.use_wrapping)
 
     def draw(self, editor, pos):
         if self.old:
@@ -201,7 +201,9 @@ class InputField(UiElement):
         self.message = starting_message
         self.selection_idx = 0
 
-        self.label = TextElement(None, hint if self.message == "" else self.message, width, height)
+        self.label = TextElement(None, hint if self.message == "" else self.message, width, height, build_sprite=False, build_texture=False)
+        self.label.use_wrapping = False
+
         self.label.edge_offset = [5, 5, 5, 5]
         self.label.set_anchor("lm", TextRenderAnchor.middle_left)
         self.old = True
@@ -376,6 +378,8 @@ class Checkbox(UiElement):
     max_size = glm.vec2(20, 20)
     def __init__(self, parent, state: bool = False, **kwargs):
         self.state = state
+        self.command = None
+
         super().__init__(parent, 20, 20, **kwargs)
 
     def build_sprite(self):
@@ -397,6 +401,8 @@ class Checkbox(UiElement):
     def handle_input(self, keycodes, mouse_buttons, input_handler):
         if input_handler.get_mouse_button_up(mouse_buttons.LEFT):
             self.state = not self.state
+            if self.command:
+                self.command(self)
 
             self.sprite = self.build_sprite()
             self.rebuild_texture()
@@ -406,6 +412,9 @@ class Checkbox(UiElement):
             self.rect.move_to(glm.vec2(*pos))
 
         super().draw(editor, pos)
+
+    def get_value(self):
+        return self.state
 
 class DropField(UiElement):
     can_claim_focus = True
@@ -428,7 +437,9 @@ class DropField(UiElement):
         self.data = starting_data
         self.selection_idx = 0
 
-        self.label = TextElement(None, hint if not self.data else self.data.display_str, width, height)
+        self.label = TextElement(None, hint if not self.data else self.data.display_str, width, height, build_sprite=False, build_texture=False)
+        self.label.use_wrapping = False
+
         self.label.edge_offset = [5, 5, 5, 5]
         self.label.set_anchor("lm", TextRenderAnchor.middle_left)
         self.old = True
@@ -440,8 +451,12 @@ class DropField(UiElement):
 
         self.type_ = type_
         self.drop_callback = None
+        self.filter_ = None
 
     def drop_drag_data(self, drag_data):
+        if self.filter_ and not self.filter_(drag_data):
+            return 
+        
         self.data = drag_data
         self.old = True
 

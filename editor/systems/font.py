@@ -1,5 +1,7 @@
-from PIL import Image, ImageFont, ImageDraw
+from PIL import Image, ImageFont, ImageDraw, ImageText
 from typing import Literal, TypeAlias
+
+from . import global_vars as modules
 
 from enum import Enum
 from pyglm import glm
@@ -16,17 +18,20 @@ class TextStyle(Enum):
     ITALICS = ITAL_FONT
 
 def render_window_label(text: str, window_width: int):
+    """
+        NOTICE: THIS METHOD CURRENTLY DOESN'T IMPLEMENT TEXT WRAPPING!
+    """
     global FONT
     
-    img = Image.new("RGBA", (window_width, 30), (0, 0, 0, 0))
+    img = Image.new("RGBA", (window_width, 22), (0, 0, 0, 0))
     drawer = ImageDraw.Draw(img, "RGBA")
 
-    drawer.text((0, 0), text, font = FONT)
+    drawer.text((0, 5), text, font = FONT)
     img = img.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
 
     return img
 
-def render_text(text: str, width: int, height: int, x_off: int, y_off: int, style: TextStyle, anchor_point: AnchorPoints = "mm", size: int = None, color: tuple[int, int, int] = (0, 0, 0)):    
+def render_text(text: str, width: int, height: int, x_off: int, y_off: int, style: TextStyle, anchor_point: AnchorPoints = "mm", size: int = None, color: tuple[int, int, int] = (0, 0, 0), enable_wrapping: bool = True):    
     img = Image.new("RGBA", (int(width), int(height)), (0, 0, 0, 0))
     drawer = ImageDraw.Draw(img, "RGBA")
 
@@ -35,7 +40,10 @@ def render_text(text: str, width: int, height: int, x_off: int, y_off: int, styl
     else:
         font = style.value
 
-    drawer.text((x_off, y_off), text, font=font, anchor=anchor_point, fill=tuple(color))
+    text_ = ImageText.Text(text.replace("_", " "), font, "RGBA")
+    if enable_wrapping:
+        text_.wrap(width)
+    drawer.text((x_off, y_off), text_, font=font, anchor=anchor_point, fill=tuple(color))
 
     img = img.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
     return img

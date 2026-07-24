@@ -14,6 +14,8 @@ if TYPE_CHECKING:
     from ghost_engine.core import logger as LoggerModule
     from ghost_engine.core.packer import Pack, PathLike 
 
+    from ghost_engine.datatypes.engine_data_type import DataType, DisplayMethods
+
     from ..editor import Window
 
 
@@ -28,6 +30,9 @@ if TYPE_CHECKING:
 
     editor_window: Window = None
 
+    engine_data_type: type[DataType] = None
+    engine_display_methods: type[DisplayMethods] = None
+
 else:
     logger_module: type = None
     logger: type = None
@@ -39,6 +44,9 @@ else:
     pack: type = None
 
     editor_window = None
+
+    engine_data_type: type = None
+    engine_display_methods: type = None
 
 from argparse import ArgumentParser
 
@@ -56,7 +64,7 @@ GL_FUNC_LOCK = threading.Lock()
 MAIN_PROC = False
 
 def get_modules(base_path: str):
-    global logger, logger_module, scene_manager, input_handler, key_codes, mouse_buttons, editor_field, pack
+    global logger, logger_module, scene_manager, input_handler, key_codes, mouse_buttons, editor_field, pack, engine_data_type, engine_display_methods
     if base_path not in sys.path:
         sys.path.insert(0, base_path)
 
@@ -86,6 +94,9 @@ def get_modules(base_path: str):
     mouse_buttons = getattr(init_module, "MouseButtons")
     editor_field = getattr(sys.modules["ghost_engine.scripting.behavior"], "EditorField")
     pack = getattr(sys.modules["ghost_engine.core.packer"], "Pack")
+
+    engine_data_type = getattr(sys.modules["ghost_engine.datatypes.engine_data_type"], "DataType")
+    engine_display_methods = getattr(sys.modules["ghost_engine.datatypes.engine_data_type"], "DisplayMethods")
 
     return logger, scene_manager, input_handler
 

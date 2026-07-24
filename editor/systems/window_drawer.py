@@ -216,13 +216,17 @@ def setup():
 BASE_OFFSET = 22
 
 class EditorUiWindow:
+    SHOW_IN_WINDOW_MENU = True
     SHOW_TITLE = True
     LOCKED = False
     name: str
 
     default_max_scroll = False
+    window_types: list[EditorUiWindow] = []
+
     def __init_subclass__(cls):
         setattr(cls, "instances", set())
+        EditorUiWindow.window_types.append(cls)
 
     def __init__(self):
         self.draw_data = UiDrawData()
@@ -266,6 +270,9 @@ class EditorUiWindow:
 
             gl.glBindTexture(gl.GL_TEXTURE_2D, self.name_texture)
             gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA, *self.text_img_size, 0, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, text_img.tobytes())
+
+            gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST)
+            gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST)
             gl.glBindTexture(gl.GL_TEXTURE_2D, 0)
 
     def build_sprite(self):
@@ -277,9 +284,9 @@ class EditorUiWindow:
 
         img = Image.new("RGBA", (int(width), int(height)))
         img_drawer = ImageDraw.Draw(img, "RGBA")
-        img_drawer.rectangle((0, 0, width, height), outline=edge, fill=center, width=2)
-        img_drawer.rectangle((2, height - 24, width-2, height), fill=top_bar, width=2)
-        img_drawer.line((2, height - 24, width-2, height - 24), fill=inset, width=2)
+        img_drawer.rectangle((0, 0, width-1, height-1), outline=edge, fill=center, width=2)
+        img_drawer.rectangle((2, height - 24, width-3, height-3), fill=top_bar, width=2)
+        img_drawer.line((2, height - 24, width-3, height - 24), fill=inset, width=2)
         del img_drawer
 
         self.sprite = img
@@ -534,8 +541,11 @@ class UiElement:
             self.parent = parent
             self.parent.ui_elements.append(self)
 
-
-        self.sprite = self.build_sprite()
+        self.old = False
+        if kwrds.pop("build_sprite", True):
+            self.sprite = self.build_sprite()
+            self.old = True
+    
         self.texture_type = kwrds.pop("tex_type", gl.GL_TEXTURE_2D)
         self.rebuild_texture_on_resize = kwrds.pop("tex_resize", True)
         if kwrds.pop("build_texture", True):
@@ -709,6 +719,7 @@ class UiRect:
 #     CLOSE_ON_SELECT = auto()
 
 class Popup(EditorUiWindow):
+    SHOW_IN_WINDOW_MENU = False
     SHOW_TITLE = False
     def __init__(self, source_pos: glm.vec2):
         super().__init__()
@@ -811,7 +822,7 @@ def open_popup(source: glm.vec2):
     return popup
 
 class UiDrawData:
-    def __init__(self, x: float = 0, y: float = 0, width: float = 100, height: float = 100):
+    def __init__(self, x: float = 50, y: float = 50, width: float = 250, height: float = 250):
         self.pos = glm.vec2(x, y)
         self.size = glm.vec2(width, height)
 

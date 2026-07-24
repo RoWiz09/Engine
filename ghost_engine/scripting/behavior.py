@@ -11,15 +11,19 @@ else:
     object: TypeAlias = Any
     collider: TypeAlias = Any
 
-def register_editor_button(func):
-    Behavior.editor_button_registry.append(func)
-    return func
+class RegisterEditorButton:
+    def __init__(self, func):
+        self.function = func
 
-EXCLUDED_FROM_BUILD = set()
-def exclude_from_build(func):
-    global EXCLUDED_FROM_BUILD
-    EXCLUDED_FROM_BUILD.add(func)
+    def __set_name__(self, owner: Behavior, name):
+        if not owner in Behavior.editor_button_registry:
+            Behavior.editor_button_registry[owner] = []
 
+        Behavior.editor_button_registry[owner].append(self.function)
+
+    def __call__(self, *args, **kwds):
+        return self.function(*args, **kwds)
+    
 class NonOverrideable:
     """
         Makes the decorated method unable to be overridden.
@@ -57,35 +61,6 @@ class NonOverrideable:
     def __get__(self, instance, owner):
         self.inst = instance
         return self.wrapped_func
-
-class InitMethod:
-    """
-        Sets the decorated method to be the method used when initalizing the class. \n
-        Automatically passes through the class type to create instances with.
-    """
-    def __init__(self, func):
-        self.func = func
-        self.vars = []
-
-    def __set_name__(self, owner: Behavior, name):
-        owner.init_method = self
-        self.owner = owner
-
-    def __call__(self, *args):
-        vars = args[:-1]
-        cls = self.func(self.owner, *args)
-        setattr(cls, "init_vars", vars)
-        return cls
-    
-    def refresh_vars(self, func, *args):
-        """
-            call this when modifying any variables needed for initalization for correct saving in the editor.
-        """
-        def wrapper(cls, *args):
-            func(cls, *args)
-            setattr(cls, "init_vars", args)
-
-        return wrapper
 
 class AdvancedBehavior:
     """
@@ -231,7 +206,7 @@ class Behavior:
     """
 
     category = "General"
-    editor_button_registry = []
+    editor_button_registry = {}
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -263,9 +238,9 @@ class Behavior:
         self.__enabled = True
 
         self.behavior_instances[type(self)].add(gameobject)
-    
-    init_method: InitMethod = None
-    init_vars = []
+
+    def post_init(self):
+        pass
 
     @property
     def gameobject(self):

@@ -1,12 +1,13 @@
 from ..core.logger import Logger
+from abc import ABC, abstractmethod
 
-class CamType:
-    def get_view_mat(self):
-        Logger.log_fatal("CamType.get_view_mat must be overridden!")
+class CamType(ABC):
+    @abstractmethod
+    def get_view_mat(self): ...
     
-    def get_projection_mat(self):
-        Logger.log_fatal("CamType.get_projection_mat must be overridden!")
+    @abstractmethod
+    def get_projection_mat(self): ...
     
-    def get_view_pos(self):
-        Logger.log_fatal("CamType.get_view_pos must be overridden!")
+    @abstractmethod
+    def get_view_pos(self): ...
         

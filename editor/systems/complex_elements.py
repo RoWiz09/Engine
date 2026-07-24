@@ -3,6 +3,8 @@ from __future__ import annotations
 from .window_drawer import *
 from .simple_elements import *
 
+from .font import get_size
+
 class MenuBar(UiElement):
     can_claim_focus = True
     class MenuButton(UiElement):
@@ -76,6 +78,7 @@ class MenuBar(UiElement):
 
         for menu in self.menus.values():
             menu.draw(editor, pos)
+            pos.x += menu.size.x + 5
 
     def handle_input(self, keycodes, mouse_buttons, input_handler):
         for elem in self.menus.values():
@@ -248,6 +251,13 @@ class LabeledCheckbox(UiElement):
         self.label.old = True
         self.checkbox = Checkbox(None, state)
 
+    @property
+    def command(self):
+        return self.checkbox.command
+    @command.setter
+    def command(self, val):
+        self.checkbox.command = val
+
     def resize(self, size):
         super().resize(size)
 
@@ -263,4 +273,65 @@ class LabeledCheckbox(UiElement):
     def handle_input(self, keycodes, mouse_buttons, input_handler):
         if self.checkbox.rect.collide_point(glm.vec2(input_handler.mouse_pos)):
             self.checkbox.handle_input(keycodes, mouse_buttons, input_handler)
+            self.checkbox.focus()
+
+        else:
+            self.checkbox.lose_focus()
+
+class LabeledInput(UiElement):
+    can_claim_focus = True
+    
+    def __init__(self, parent, width, height, label: str, starting: str = "", type_: type = str, **kwrds):
+        super().__init__(parent, width, height)
+
+        self.focused_elem: InputField = None
+        self.ui_elements = []
+
+        self.label = TextElement(None, label.replace("_", " ").title()[:20], get_size(label.replace("_", " ").title()[:20], TextStyle.NORMAL).x, height).set_anchor("lm", TextRenderAnchor.middle_left)
+        self.label.old = True
+        self.input_field = InputField(self, width - self.label.size.x - 10, height, hint=label, starting_message=starting, type_=type_)
+        if type_ == float:
+            self.input_field.default_val = 0.0
+        if type_ == int:
+            self.input_field.default_val = 0
+
+        del self.ui_elements
+
+    @property
+    def command(self):
+        return self.input_field.command
+    @command.setter
+    def command(self, val):
+        self.input_field.command = val
+
+    @property
+    def validate_command(self):
+        return self.input_field.validate_command
+    @validate_command.setter
+    def validate_command(self, val):
+        self.input_field.validate_command = val
+
+    def resize(self, size):
+        super().resize(size)
+
+        self.input_field.resize(size - glm.vec2(self.label.size.x + 10, 0))
+
+    def draw(self, editor, pos):
+        if self.rect.pos != pos:
+            self.rect.move_to(glm.vec2(*pos))
+            
+        self.label.draw(editor, pos)
+        self.input_field.draw(editor, pos + glm.vec2(self.size.x - self.input_field.size.x, 0))
+
+        if self.focused == False and self.input_field.focused:
+            self.input_field.lose_focus()
+            self.focused_elem = None
         
+    def handle_input(self, keycodes, mouse_buttons, input_handler):
+        if self.input_field.rect.collide_point(glm.vec2(input_handler.mouse_pos)) and not self.focused_elem:
+            self.focused_elem = self.input_field
+
+        if self.focused_elem:
+            self.hold_focus = self.input_field.hold_focus
+            self.input_field.handle_input(keycodes, mouse_buttons, input_handler)
+            self.input_field.focus()

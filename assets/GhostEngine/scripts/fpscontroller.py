@@ -14,7 +14,7 @@ class FPSController(Behavior):
     can_jump = EditorField(bool, True)
     jump_force = EditorField(float, 5.0)
 
-    mouse_sens = EditorField(float, 1.0)
+    mouse_sensitivity = EditorField(float, 1.0)
     
     def __init__(self, gameobject):
         super().__init__(gameobject)
