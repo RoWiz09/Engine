@@ -195,7 +195,7 @@ class Input:
         """True only on the frame the button was pressed."""
         return (
             mouse_button.value in self.__mouse_buttons_pressed_now
-            and mouse_button.value not in self.__mouse_buttons_pressed_last
+            and not mouse_button.value in self.__mouse_buttons_pressed_last
         )
 
     def get_mouse_button(self, mouse_button: MouseButtons) -> bool:

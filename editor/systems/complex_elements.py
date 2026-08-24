@@ -352,7 +352,6 @@ class DropdownButton(UiElement):
         self.label = TextButton(None, width - base_height, base_height, text, kwrds.pop("button_click_func", None))
         self.dropdown = SimpleDropdown(None, base_height, base_height)
         def set_state(state):
-            print(state)
             self.open = state
 
         self.dropdown.open_callback = set_state
@@ -395,6 +394,9 @@ class DropdownButton(UiElement):
                 pos.y += elem.get_height()
                 self.size.y += self.y_padding + elem.get_height()
 
+        else:
+            self.size.y = self.__base_height
+
     def lose_focus(self):
         super().lose_focus()
 
@@ -405,15 +407,15 @@ class DropdownButton(UiElement):
     def handle_input(self, keycodes, mouse_buttons, input_handler):
         mouse_pos = glm.vec2(input_handler.get_cursor_pos())
 
-        if self.label.rect.collide_point(mouse_pos):
-            if self.focused_elem and self.focused_elem != self.label:
+        if self.label.rect.collide_point(mouse_pos) and self.focused_elem != self.label:
+            if self.focused_elem:
                 self.focused_elem.lose_focus()
 
             self.focused_elem = self.label
             self.focused_elem.focus()
 
-        elif self.dropdown.rect.collide_point(mouse_pos):
-            if self.focused_elem and self.focused_elem != self.dropdown:
+        elif self.dropdown.rect.collide_point(mouse_pos) and self.focused_elem != self.dropdown:
+            if self.focused_elem:
                 self.focused_elem.lose_focus()
 
             self.focused_elem = self.dropdown

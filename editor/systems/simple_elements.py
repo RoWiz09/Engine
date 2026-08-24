@@ -810,7 +810,7 @@ class SimpleDropdown(UiElement):
         y1 = int(self.size.y * .33)
         y2 = int(self.size.y * .66)
 
-        if self.open == False:
+        if not self.open:
             drawer.line((x1, y1, x2, y2, x3, y1), self.color if not self.focused else self.selected_col, width=1)
         else:
             drawer.line((x1, y2, x2, y1, x3, y2), self.color if not self.focused else self.selected_col, width=1)
@@ -826,13 +826,17 @@ class SimpleDropdown(UiElement):
         return super().lose_focus()
     
     def draw(self, editor, pos):
+        if self.old:
+            self.sprite = self.build_sprite()
+            self.rebuild_texture()
+
         if self.rect.pos != pos:
             self.rect.move_to(glm.vec2(*pos))
 
         super().draw(editor, pos)
 
     def handle_input(self, keycodes, mouse_buttons, input_handler):
-        if input_handler.get_mouse_button_down(mouse_buttons.LEFT):
+        if input_handler.get_mouse_button_up(mouse_buttons.LEFT):
             self.open = not self.open
             self.old = True
 

@@ -36,6 +36,9 @@ class DiscordRichPresence:
 
     def connect(self):
         ipc_path = self._get_ipc_path()
+
+        # Check if the discord ipc even exists
+        if not os.path.exists(ipc_path): return False
         
         if sys.platform == "win32":
             self.socket = open(ipc_path, "wb+", buffering=0)
@@ -47,6 +50,7 @@ class DiscordRichPresence:
         self._send_packet(opcode=0, payload=handshake_payload)
         
         self._read_response()
+        return True
 
     def _send_packet(self, opcode: int, payload: dict):
         payload_json = json.dumps(payload).encode("utf-8")
@@ -86,7 +90,7 @@ class DiscordRichPresence:
     def start_handling_activity(self):
         import threading
         def handler(self: DiscordRichPresence):
-            self.connect()
+            if not self.connect(): return
 
             while True:
                 state_data = [f"Working on project: {os.environ.get("project", "")}"]

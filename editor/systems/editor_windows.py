@@ -449,10 +449,12 @@ class FileViewer(EditorUiWindow):
                 if filename.endswith(".rbt"):
                     self.script_templates.append(dirpath / filename)
 
+        self.excluded_directories = {"__pycache__", ".vscode"}
+
         def get_subdirectories(path: Path) -> list[Path] | None:
             subdirectories = []
             for subpath in path.iterdir():
-                if subpath.is_dir() and subpath.name != "__pycache__":
+                if subpath.is_dir() and not subpath.name in self.excluded_directories:
                     subdirectories.append(subpath)
 
             return None if subdirectories == [] else subdirectories
@@ -483,6 +485,8 @@ class FileViewer(EditorUiWindow):
         self.sidebar = []
         self.sidebar_padding = 5
         for pkg in sorted(self.selected_dir.iterdir(), key=lambda p: p.name == "GhostEngine"):
+            if pkg.name in self.excluded_directories: continue
+
             if get_subdirectories(pkg):
                 self.sidebar.append(dropdown:=DropdownButton(None, 75, 12, pkg.name, button_click_func=lambda pkg_=pkg: self.route_to(pkg_)))
 
