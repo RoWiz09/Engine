@@ -49,7 +49,6 @@ class MeshCollider(Behavior, ColliderType):
 
     def load(self):
         self.mesh = Model(self.mesh)
-        print(self.mesh)
         path = Path(self.mesh.get_value())
         
         data = Pack().get_contents(path)

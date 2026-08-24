@@ -42,7 +42,12 @@ def render_text(text: str, width: int, height: int, x_off: int, y_off: int, styl
 
     text_ = ImageText.Text(text.replace("_", " "), font, "RGBA")
     if enable_wrapping:
-        text_.wrap(width)
+        try:
+            text_.wrap(width)
+
+        except:
+            pass
+
     drawer.text((x_off, y_off), text_, font=font, anchor=anchor_point, fill=tuple(color))
 
     img = img.transpose(Image.Transpose.FLIP_TOP_BOTTOM)

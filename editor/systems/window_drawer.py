@@ -245,7 +245,9 @@ class EditorUiWindow:
 
         self.menu_bar = None
         self.sidebar: list[UiElement] = None
+        self.sidebar_padding = 0
         self.sidebar_width_ratio = 1/5
+        self.sidebar_rect = UiRect(0, 0, 0, 0)
 
         self.build_sprite()
         self.rebuild_texture()
@@ -337,7 +339,7 @@ class EditorUiWindow:
 
         top_offset = BASE_OFFSET if self.SHOW_TITLE else 0
 
-        self.stencil_topleft = glm.vec2(
+        self.stencil_topleft = glm.vec2( 
             self.rect.left + self.draw_data.padding.x + (0 if self.sidebar is None else self.draw_data.size.x * self.sidebar_width_ratio),
             self.rect.top + self.draw_data.padding.y + top_offset
         )
@@ -424,23 +426,27 @@ class EditorUiWindow:
 
             gl.glBindTexture(gl.GL_TEXTURE_2D, 0)
 
-        # Pos calculation
         pos = self.draw_data.pos + self.draw_data.padding
         if self.SHOW_TITLE:
-            pos.y += BASE_OFFSET - self.scroll
-        else:
-            pos.y -= self.scroll
+            pos.y += BASE_OFFSET
 
+        # Sidebar
         pos_off = glm.vec2(0, 0)
         if not self.sidebar is None:
+            self.sidebar_rect.pos = glm.vec2(pos)
+            self.sidebar_rect.size = glm.vec2(self.draw_data.size.x * self.sidebar_width_ratio, self.draw_data.size.y - BASE_OFFSET)
+            
             tmp_pos = glm.vec2(pos)
             for obj in self.sidebar:
                 if obj.size.x != self.draw_data.size.x * self.sidebar_width_ratio - (self.draw_data.padding.x * 2):
                     obj.resize(glm.vec2(self.draw_data.size.x * self.sidebar_width_ratio - (self.draw_data.padding.x * 2), obj.size.y))
-                obj.draw(editor, tmp_pos)
-                tmp_pos.y += obj.get_height() + self.draw_data.padding.y
+                obj.draw(editor, glm.vec2(tmp_pos))
+                tmp_pos.y += obj.get_height() + self.sidebar_padding
 
             pos_off.x = self.draw_data.size.x * self.sidebar_width_ratio
+
+        # Apply the scroll
+        pos.y -= self.scroll
 
         # Create a stencil before element rendering
         WINDOW_SHADER.set_mat4("uModel", self.stencil_model)

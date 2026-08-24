@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import override
+
 from .window_drawer import *
 from .simple_elements import *
 
@@ -335,3 +337,97 @@ class LabeledInput(UiElement):
             self.hold_focus = self.input_field.hold_focus
             self.input_field.handle_input(keycodes, mouse_buttons, input_handler)
             self.input_field.focus()
+
+class DropdownButton(UiElement):
+    can_claim_focus = True
+
+    def __init__(self, parent, width, base_height, text, **kwrds):
+        super().__init__(parent, width, base_height, **kwrds)
+
+        self.elems: list[UiElement] = []
+        self.open = False
+
+        self.__base_height = base_height
+
+        self.label = TextButton(None, width - base_height, base_height, text, kwrds.pop("button_click_func", None))
+        self.dropdown = SimpleDropdown(None, base_height, base_height)
+        def set_state(state):
+            print(state)
+            self.open = state
+
+        self.dropdown.open_callback = set_state
+
+        self.focused_elem = None
+        
+        self.auto_populate = False
+        self.auto_populate_func = None
+
+        self.y_padding = 5
+
+    def resize(self, size):
+        super().resize(size)
+
+        size.x -= size.y
+        self.label.resize(size)
+        self.dropdown.resize(glm.vec2(size.y))
+
+    def draw(self, editor, pos):
+        if self.rect.pos != pos:
+            self.rect.move_to(glm.vec2(*pos))
+
+        if not self.open and self.elems != [] and self.auto_populate:
+            self.focused_elem = None
+            self.elems.clear()
+             
+        self.label.draw(editor, pos)
+        self.dropdown.draw(editor, pos + glm.vec2(self.label.size.x, 0))
+
+        if self.open:
+            self.size.y = self.__base_height
+            if self.auto_populate and self.elems == []:
+                self.elems = self.auto_populate_func(self.label.edge_offset[0] + 10)
+
+            pos.y += self.__base_height + self.y_padding
+
+            for idx, elem in enumerate(self.elems):
+                elem.draw(editor, pos)
+
+                pos.y += elem.get_height()
+                self.size.y += self.y_padding + elem.get_height()
+
+    def lose_focus(self):
+        super().lose_focus()
+
+        if self.focused_elem:
+            self.focused_elem.lose_focus()
+            self.focused_elem = None
+
+    def handle_input(self, keycodes, mouse_buttons, input_handler):
+        mouse_pos = glm.vec2(input_handler.get_cursor_pos())
+
+        if self.label.rect.collide_point(mouse_pos):
+            if self.focused_elem and self.focused_elem != self.label:
+                self.focused_elem.lose_focus()
+
+            self.focused_elem = self.label
+            self.focused_elem.focus()
+
+        elif self.dropdown.rect.collide_point(mouse_pos):
+            if self.focused_elem and self.focused_elem != self.dropdown:
+                self.focused_elem.lose_focus()
+
+            self.focused_elem = self.dropdown
+            self.focused_elem.focus()
+
+        else:
+            for elem in self.elems:
+                if elem.rect.collide_point(mouse_pos):
+                    if self.focused_elem and self.focused_elem != elem:
+                        self.focused_elem.lose_focus()
+
+                    self.focused_elem = elem
+                    self.focused_elem.focus()
+
+        if self.focused_elem:
+            self.focused_elem.handle_input(keycodes, mouse_buttons, input_handler)
+

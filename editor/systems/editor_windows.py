@@ -449,10 +449,51 @@ class FileViewer(EditorUiWindow):
                 if filename.endswith(".rbt"):
                     self.script_templates.append(dirpath / filename)
 
-        self.sidebar = []
-        for pkg in sorted(self.selected_dir.iterdir(), key=lambda p: p.name == "GhostEngine"):
-            self.sidebar.append(Button(None, 75, 20, pkg.name, lambda pkg_=pkg: self.route_to(pkg_)))
+        def get_subdirectories(path: Path) -> list[Path] | None:
+            subdirectories = []
+            for subpath in path.iterdir():
+                if subpath.is_dir() and subpath.name != "__pycache__":
+                    subdirectories.append(subpath)
 
+            return None if subdirectories == [] else subdirectories
+
+        def autofill_dropdown(pkg: Path, offset: int):
+            elems = []
+
+            subdirectories = get_subdirectories(pkg)
+            for subpkg in subdirectories:
+                if get_subdirectories(subpkg):
+                    elems.append(dropdown:=DropdownButton(None, 75, 12, subpkg.name, button_click_func=lambda pkg_=subpkg: self.route_to(pkg_)))
+                    dropdown.auto_populate = True
+                    dropdown.auto_populate_func = lambda o, pkg_=subpkg: autofill_dropdown(pkg_, o)
+
+                    dropdown.label.edge_offset[0] += offset
+                    dropdown.label.sprite = dropdown.label.build_sprite()
+                    dropdown.label.rebuild_texture()
+
+                else:
+                    elems.append(button := TextButton(None, 75, 12, subpkg.name, lambda pkg_=subpkg: self.route_to(pkg_)))
+                    button.edge_offset[0] += offset
+
+                    button.sprite = button.build_sprite()
+                    button.rebuild_texture()
+
+            return elems
+
+        self.sidebar = []
+        self.sidebar_padding = 5
+        for pkg in sorted(self.selected_dir.iterdir(), key=lambda p: p.name == "GhostEngine"):
+            if get_subdirectories(pkg):
+                self.sidebar.append(dropdown:=DropdownButton(None, 75, 12, pkg.name, button_click_func=lambda pkg_=pkg: self.route_to(pkg_)))
+
+                dropdown.auto_populate = True
+                dropdown.auto_populate_func = lambda o, pkg_=pkg: autofill_dropdown(pkg_, o)
+            else:
+                self.sidebar.append(TextButton(None, 75, 12, pkg.name, lambda pkg_=pkg: self.route_to(pkg_)))
+
+            # self.sidebar.append(HorizontalLine(None, width=75, height=2))
+        self.sidebar.reverse()
+        
         self.build_sprite()
         self.rebuild_texture()
         self.regen_stencil()
@@ -524,7 +565,7 @@ class FileViewer(EditorUiWindow):
         button.click_callback = lambda p=subpopup, b=button: open_new_script_subpopup(p, b)
 
     def handle_input(self, key_codes, mouse_buttons, input_handler):
-        if input_handler.get_mouse_button_down(mouse_buttons.RIGHT):
+        if input_handler.get_mouse_button_down(mouse_buttons.RIGHT) and not self.sidebar_rect.collide_point(glm.vec2(input_handler.mouse_pos)):
             if self.selected_dir.parts[-1] != "assets":
                 popup = open_popup(glm.vec2(input_handler.mouse_pos))
                 button = Button(popup, 90, 20, "New File", None)

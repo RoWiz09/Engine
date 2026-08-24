@@ -157,6 +157,77 @@ class Button(UiElement):
 
         self.label.resize(size)
 
+class TextButton(UiElement):
+    can_claim_focus = True
+
+    def __init__(self, parent, width, height, text, click_callback, **kwrds):
+        self.edge_offset = [0, 0]
+        self.text = text
+
+        self.click_callback = click_callback
+
+        self.color = (220, 220, 220)
+        self.focused_color = (255, 255, 255)
+
+        self.style = TextStyle.NORMAL
+        self.anchor: AnchorPoints = "lm"
+        self.text_draw_anchor: TextRenderAnchor = TextRenderAnchor.middle_left
+
+        self.use_wrapping = True
+
+        self.text_size = None
+        super().__init__(parent, width, height, **kwrds)
+
+        self.was_focused = self.focused
+
+    def bold(self):
+        self.style = TextStyle.BOLD
+        self.old = True
+        return self
+
+    def italicize(self):
+        self.style = TextStyle.ITALICS
+        self.old = True
+        return self
+
+    def set_anchor(self, anchor: AnchorPoints, render_anchor: TextRenderAnchor):
+        self.anchor = anchor
+        self.text_draw_anchor = render_anchor
+        return self
+
+    def set_text_size(self, new_text_size: int):
+        self.text_size = new_text_size
+        self.old = True
+        return self
+
+    def build_sprite(self):
+        offset = self.size * self.text_draw_anchor.value
+        offset.x += self.edge_offset[0]
+        offset.y += self.edge_offset[1]
+
+        color = self.color
+        if self.focused:
+            color = self.focused_color
+
+        return render_text(self.text, int(self.size.x), int(self.size.y), 
+                                int(offset.x), int(offset.y), self.style, self.anchor, self.text_size, color=color, enable_wrapping=self.use_wrapping)
+
+    def draw(self, editor, pos):
+        if self.old or self.was_focused != self.focused:
+            self.sprite = self.build_sprite()
+            self.rebuild_texture()
+
+            self.old = False
+
+            self.was_focused = self.focused
+
+        return super().draw(editor, pos)
+
+    def handle_input(self, keycodes, mouse_buttons, input_handler):
+        if input_handler.get_mouse_button_up(mouse_buttons.LEFT):
+            if self.click_callback:
+                self.click_callback()
+
 class InputField(UiElement):
     can_claim_focus = True
     hold_focus = False
@@ -628,20 +699,20 @@ class HorizontalLayout(UiElement):
 
 class HorizontalLine(UiElement):
     def __init__(self, parent: EditorUiWindow, **kwargs):
-        if 'width' in kwargs:
-            width = kwargs.pop('width')
+        default_width = 0
+        if parent:
+            default_width = parent.get_draw_data().size.x - parent.get_draw_data().padding.x * 2
 
-        else:
-            width = parent.get_draw_data().size.x - parent.get_draw_data().padding.x * 2
-        height = 10
+        width = kwargs.pop('width', default_width)
+        height = kwargs.pop('height', 10)
 
         super().__init__(parent, width, height, **kwargs)
 
     def build_sprite(self):
         img = Image.new("RGBA", (int(self.rect.size.x), int(self.rect.size.y)), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img, "RGBA")
-        draw.line((0, 4, int(self.size.x), 4), (66, 69, 71), width=2)
-        draw.line((0, 6, int(self.size.x), 6), (59, 63, 68), width=2)
+        draw.line((0, self.size.y/2 - 1, int(self.size.x), self.size.y/2 - 1), (66, 69, 71), width=2)
+        draw.line((0, self.size.y/2 + 1, int(self.size.x), self.size.y/2 + 1), (59, 63, 68), width=2)
         return img
 
 class Tab(UiElement):
@@ -715,3 +786,55 @@ def build_vec3_input(parent: EditorUiWindow | HorizontalLayout, vector: glm.vec3
     z_pos.run_command_when_empty = False
     z_pos.command = set_values
     z_pos.default_val = 0.0
+
+class SimpleDropdown(UiElement):
+    can_claim_focus = True
+
+    def __init__(self, parent, width, height, color=(200, 200, 200), selected_color=(255, 255, 255), **kwrds):
+        self.open = False
+        self.color = color
+        self.selected_col = selected_color
+
+        self.open_callback = None
+
+        super().__init__(parent, width, height, **kwrds)
+
+    def build_sprite(self):
+        img = Image.new("RGBA", (int(self.size.x), int(self.size.y)), (0, 0, 0, 0))
+        drawer = ImageDraw.Draw(img, "RGBA")
+
+        x1 = int(self.size.x * .25)
+        x2 = int(self.size.x * .5)
+        x3 = int(self.size.x * .75)
+
+        y1 = int(self.size.y * .33)
+        y2 = int(self.size.y * .66)
+
+        if self.open == False:
+            drawer.line((x1, y1, x2, y2, x3, y1), self.color if not self.focused else self.selected_col, width=1)
+        else:
+            drawer.line((x1, y2, x2, y1, x3, y2), self.color if not self.focused else self.selected_col, width=1)
+
+        return img
+
+    def focus(self):
+        self.old = True
+        return super().focus()
+
+    def lose_focus(self):
+        self.old = True
+        return super().lose_focus()
+    
+    def draw(self, editor, pos):
+        if self.rect.pos != pos:
+            self.rect.move_to(glm.vec2(*pos))
+
+        super().draw(editor, pos)
+
+    def handle_input(self, keycodes, mouse_buttons, input_handler):
+        if input_handler.get_mouse_button_down(mouse_buttons.LEFT):
+            self.open = not self.open
+            self.old = True
+
+            if self.open_callback:
+                self.open_callback(self.open)
