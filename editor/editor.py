@@ -151,6 +151,8 @@ class Window:
 
         self.__task_scheduler__ = TaskScheduler()
 
+        self.current_cursor = global_vars.current_cursor_type
+
     def setup_root_menu_bar(self):
         menu_bar = self.drawer.top_bar
         menu_bar.add_menu("File")
@@ -251,6 +253,7 @@ class Window:
         gl.glDisable(gl.GL_DEPTH_TEST)
 
     def update(self):
+        global_vars.current_cursor_type = glfw.ARROW_CURSOR
         if glfw.get_window_attrib(self.window, glfw.ICONIFIED) != 0:
             return
         
@@ -278,6 +281,12 @@ class Window:
         glfw.swap_buffers(self.window)
 
         self.__task_scheduler__.update_tasks()
+
+        if self.current_cursor != global_vars.current_cursor_type:
+            cursor = glfw.create_standard_cursor(global_vars.current_cursor_type)
+            glfw.set_cursor(self.window, cursor)
+
+            self.current_cursor = global_vars.current_cursor_type
 
     def __render_editor_ui(self):
         self.drawer.render(self)

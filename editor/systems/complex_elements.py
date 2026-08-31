@@ -364,11 +364,14 @@ class DropdownButton(UiElement):
         self.y_padding = 5
 
     def resize(self, size):
+        size.y = self.__base_height
         super().resize(size)
 
-        size.x -= size.y
-        self.label.resize(size)
+        self.label.resize(size - glm.vec2(self.__base_height, 0))
         self.dropdown.resize(glm.vec2(size.y))
+
+        for elem in self.elems:
+            elem.resize(self.size)
 
     def draw(self, editor, pos):
         if self.rect.pos != pos:
@@ -385,6 +388,8 @@ class DropdownButton(UiElement):
             self.size.y = self.__base_height
             if self.auto_populate and self.elems == []:
                 self.elems = self.auto_populate_func(self.label.edge_offset[0] + 10)
+                for elem in self.elems:
+                    elem.resize(self.size)
 
             pos.y += self.__base_height + self.y_padding
 

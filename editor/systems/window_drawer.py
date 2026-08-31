@@ -117,6 +117,8 @@ class WindowDrawer:
 
     def handle_input(self, key_codes: type[KeyCodes], mouse_buttons: type[MouseButtons], input_handler: Input):
         mouse_pos = glm.vec2(input_handler.mouse_pos)
+        self.docker.INST.validate_resize(input_handler, mouse_buttons)
+
         if self.top_bar.rect.collide_point(mouse_pos):
             self.top_bar.handle_input(key_codes, mouse_buttons, input_handler)
 
@@ -229,6 +231,8 @@ class EditorUiWindow:
         EditorUiWindow.window_types.append(cls)
 
     def __init__(self):
+        self.logger = modules.logger(self.__class__.name.capitalize() if hasattr(self.__class__, "name") else self.__class__.__name__.capitalize())
+
         self.draw_data = UiDrawData()
         self.ui_elements: list[UiElement] = []
 
@@ -263,6 +267,8 @@ class EditorUiWindow:
 
         self.list_lock = modules.threading.Lock()
         self.layout_mode = LayoutMode.VERTICAL
+
+        self.dock_parent = None
 
     def rebuild_texture(self):
         gl.glBindTexture(gl.GL_TEXTURE_2D, self.bg_tex)
@@ -602,8 +608,7 @@ class UiElement:
         self.shown = not self.shown
 
     def resize_to_fill_window(self):
-        self.size = glm.vec2(self.parent.draw_data.size.x - self.parent.draw_data.padding.x * 2, 
-                             self.parent.draw_data.size.y - self.parent.draw_data.padding.y * 2 - BASE_OFFSET)
+        self.size = glm.vec2(self.parent.renderable_width, self.parent.renderable_height)
         
         self.rect.resize(self.size)
         

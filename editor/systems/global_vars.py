@@ -1,5 +1,6 @@
 import importlib.util as import_util
 import os, sys
+import glfw
 
 import threading
 
@@ -49,6 +50,8 @@ else:
     engine_display_methods: type = None
 
 from argparse import ArgumentParser
+
+current_cursor_type = glfw.ARROW_CURSOR
 
 ARGS = None
 def parse_args():

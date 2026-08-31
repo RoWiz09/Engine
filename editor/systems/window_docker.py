@@ -17,32 +17,57 @@ Split: TypeAlias = Literal["horizontal", "vertical"]
 SplitDirection: TypeAlias = Literal["left", "right", "top", "bottom"]
 Child: TypeAlias = Literal["child_a", "child_b"]
 
+@dataclass
+class DockNodeEdges:
+    left_owner: Optional[DockNode] = None
+    right_owner: Optional[DockNode] = None
+    top_owner: Optional[DockNode] = None
+    bottom_owner: Optional[DockNode] = None
+
+    @property
+    def all(self):
+        return [self.left_owner, self.top_owner, self.right_owner, self.bottom_owner]
+
 class DockNode:
+    CURSOR_AT_FRAME_START = global_vars.current_cursor_type
+
     def __init__(self, docker: Docker):
         self.split_side: Optional[Split] = None
 
         self.child_a: Optional[DockNode] = None
         self.child_b: Optional[DockNode] = None
-        self.split_ratio: float = 0.5
+        self.__split_ratio: float = 0.5
 
         self.parent: Optional[DockNode] = None
 
         self.est_size: glm.vec2 = glm.vec2(0)
         self.est_pos: glm.vec2 = glm.vec2(0)
 
-        # RoWiz (4/8/26):
-        # Still need to implement tabs in the UI, but changed this to a list anyway.
         self.windows: dict[EditorUiWindow, Tab] = {}
         self.selected_window = None
 
         docker.nodes.append(self)
+        self.edges = DockNodeEdges()
+        self.resizing = False
+
+    @property
+    def split_ratio(self):
+        return self.__split_ratio
+
+    @split_ratio.setter
+    def split_ratio(self, value):
+        self.__split_ratio = min(0.95, max(0.05, value))
+
+    @property
+    def is_root(self):
+        return self.parent is None
 
     def set_data_from_node(self, node: DockNode):
         if node is self:
             return
 
         self.split_side = node.split_side
-        self.split_ratio = node.split_ratio
+        self.__split_ratio = node.__split_ratio
 
         self.child_a = node.child_a
         self.child_b = node.child_b
@@ -59,6 +84,14 @@ class DockNode:
         self.child_a.parent = self
         self.child_b = node_b
         self.child_b.parent = self
+
+        if split == "horizontal":
+            node_a.edges.bottom_owner = self
+            node_b.edges.top_owner = self
+
+        elif split == "vertical":
+            node_a.edges.right_owner = self
+            node_b.edges.left_owner = self
 
         self.split_side = split
 
@@ -92,6 +125,8 @@ class DockNode:
 
         window = windows[self.selected_window]
         window.draw(editor)
+        if window.dock_parent is None:
+            window.dock_parent = self
 
         input_ = modules.input_handler()
 
@@ -116,13 +151,91 @@ class DockNode:
             button.draw(editor, pos)
             pos.x += button.size.x
 
-            if button.rect.collide_point(mouse_pos) and input_.get_mouse_button_down(modules.mouse_buttons.LEFT):
-                self.selected_window = windows.index(window)
+            if button.rect.collide_point(mouse_pos):
+                global_vars.current_cursor_type = glfw.POINTING_HAND_CURSOR
+                if input_.get_mouse_button_down(modules.mouse_buttons.LEFT):
+                    self.selected_window = windows.index(window)
 
         if window.rect.collide_point(mouse_pos):
             return True
         
         return False
+
+    def handle_resize(self, input_handler: global_vars.Input, mouse_buttons: global_vars.MouseButtons):
+        if self.is_root:
+            return
+
+        mouse_pos = glm.vec2(input_handler.get_cursor_pos())
+
+        x, y = self.est_pos
+        w, h = self.est_size
+
+        ew_draggable = False
+        ns_draggable = False
+        for idx, edge in enumerate(self.edges.all):
+            if edge is None:
+                continue
+
+            match idx:
+                case 0:  # Left
+                    x1, y1 = x, y
+                    x2, y2 = x + 3, y + h
+
+                case 1:  # Top
+                    x1, y1 = x, y
+                    x2, y2 = x + w, y + 3
+
+                case 2:  # Right
+                    x1, y1 = x + w - 3, y
+                    x2, y2 = x + w, y + h
+                case 3:  # Bottom
+                    x1, y1 = x, y + h - 3
+                    x2, y2 = x + w, y + h
+
+                case _:
+                    continue
+
+            # Mouse is inside this edge's 3-pixel-wide/tall region
+            if x1 <= mouse_pos.x <= x2 and y1 <= mouse_pos.y <= y2:
+                ew_draggable = idx == 0 or idx == 2
+                ns_draggable = idx == 1 or idx == 3
+
+        cursor = global_vars.current_cursor_type
+        if ew_draggable and ns_draggable and cursor != glfw.RESIZE_ALL_CURSOR:
+            global_vars.current_cursor_type = glfw.RESIZE_ALL_CURSOR
+
+        elif ew_draggable and cursor != glfw.RESIZE_EW_CURSOR:
+            global_vars.current_cursor_type = glfw.RESIZE_EW_CURSOR
+
+        elif ns_draggable and cursor != glfw.RESIZE_NS_CURSOR:
+            global_vars.current_cursor_type = glfw.RESIZE_NS_CURSOR
+
+        if (ew_draggable or ns_draggable) and input_handler.get_mouse_button_down(mouse_buttons.LEFT):
+            self.resizing = True
+
+        return self.resizing
+
+    def update_size(self, input_handler: global_vars.Input, mouse_buttons: global_vars.MouseButtons):
+        if input_handler.get_mouse_button_up(mouse_buttons.LEFT):
+            Docker.INST.compute_node(self.parent, global_vars.editor_window)
+            self.resizing = False
+            return
+
+        source = self.parent.est_pos
+        mouse_pos_relative = glm.vec2(input_handler.get_cursor_pos()) - source
+
+        size = self.parent.est_size
+        if self.parent.split_side == "vertical":
+            split_ratio = mouse_pos_relative.x / size.x
+        else:
+            split_ratio = mouse_pos_relative.y / size.y
+
+        def within(min_, max_, value):
+            return min_ < value < max_
+
+        if not within(self.parent.split_ratio - 0.05, split_ratio, self.parent.split_ratio + 0.05):
+            self.parent.split_ratio = split_ratio
+            Docker.INST.compute_node(self.parent, global_vars.editor_window)
 
 class Docker:
     INST: Docker = None
@@ -130,6 +243,8 @@ class Docker:
         __class__.INST = self
         self.nodes: list[DockNode] = [] 
         self.root = DockNode(self)
+
+        self.current_resize = None
 
     def get_node_info(self, node: DockNode, editor: Window):
         if not node.parent:
@@ -139,11 +254,11 @@ class Docker:
         child_pos = parent.get_child(node)
         if child_pos == "child_a":
             # Clamp ratio so it can't hide windows
-            split_ratio = glm.clamp(parent.split_ratio, 0.05, 0.95)
+            split_ratio = parent.split_ratio
         else:
             # Ratio should be 1-(clamped ratio)
-            split_ratio = 1 - glm.clamp(parent.split_ratio, 0.05, 0.95)
-            other_ratio = glm.clamp(parent.split_ratio, 0.05, 0.95)
+            split_ratio = 1 - parent.split_ratio
+            other_ratio = parent.split_ratio
 
         base_size = glm.vec2(parent.est_size) # Copy the parent's (estimated) size, and adjust it where needed.
         base_pos = glm.vec2(parent.est_pos) # Copy the parent's (estimated) position, and adjust it when 
@@ -179,7 +294,7 @@ class Docker:
             modules.logger("EDITOR").log_warning("A node's split ratio was set to be outside of it's range!")
             return
         
-        node.split_ratio = ratio
+        node.__split_ratio = ratio
 
         # self.compute_node(node, editor) 
 
@@ -406,3 +521,13 @@ class Docker:
                 focused = list(node.windows.keys())[node.selected_window]
 
         return focused
+
+    def validate_resize(self, input_handler: global_vars.Input, mouse_buttons: global_vars.MouseButtons):
+        if self.current_resize:
+            self.current_resize.update_size(input_handler, mouse_buttons)
+            if not self.current_resize.resizing:
+                self.current_resize = None
+
+        for node in self.nodes:
+            if node.handle_resize(input_handler, mouse_buttons):
+                self.current_resize = node

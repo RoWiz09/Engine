@@ -145,6 +145,7 @@ class Button(UiElement):
         self.label.draw(editor, pos + self.pos_offset)
     
     def handle_input(self, keycodes, mouse_buttons, input_handler):
+        modules.current_cursor_type = glfw.POINTING_HAND_CURSOR
         if input_handler.get_mouse_button_up(mouse_buttons.LEFT):
             if self.click_callback:
                 self.click_callback()
@@ -224,6 +225,7 @@ class TextButton(UiElement):
         return super().draw(editor, pos)
 
     def handle_input(self, keycodes, mouse_buttons, input_handler):
+        modules.current_cursor_type = glfw.POINTING_HAND_CURSOR
         if input_handler.get_mouse_button_up(mouse_buttons.LEFT):
             if self.click_callback:
                 self.click_callback()
@@ -420,6 +422,7 @@ class InputField(UiElement):
                 self.lose_focus()
 
     def handle_input(self, keycodes, mouse_buttons, input_handler):
+        modules.current_cursor_type = glfw.IBEAM_CURSOR
         mouse_up = input_handler.get_mouse_button_up(mouse_buttons.LEFT)
         collides = self.rect.collide_point(glm.vec2(*input_handler.mouse_pos))
         if mouse_up and collides:
@@ -470,6 +473,7 @@ class Checkbox(UiElement):
         return img
     
     def handle_input(self, keycodes, mouse_buttons, input_handler):
+        modules.current_cursor_type = glfw.POINTING_HAND_CURSOR
         if input_handler.get_mouse_button_up(mouse_buttons.LEFT):
             self.state = not self.state
             if self.command:
@@ -589,11 +593,16 @@ class DropField(UiElement):
         return self.data
     
     def handle_input(self, keycodes, mouse_buttons, input_handler):
+        modules.current_cursor_type = glfw.POINTING_HAND_CURSOR
+
         if input_handler.get_mouse_button_down(mouse_buttons.RIGHT):
             self.data = None
             if self.drop_callback:
                 self.drop_callback(self)
             self.old = True
+
+    def get_drag_data(self):
+        return self.get_value()
 
 class HorizontalLayout(UiElement):
     can_claim_focus = True
@@ -752,6 +761,10 @@ class Tab(UiElement):
     def set_selected(self, state: bool):
         self.selected = state
 
+    def handle_input(self, keycodes, mouse_buttons, input_handler):
+        modules.current_cursor_type = glfw.POINTING_HAND_CURSOR
+        return super().handle_input(keycodes, mouse_buttons, input_handler)
+
 def format_num(num):
     output = f"{round(num, 10):g}"
 
@@ -836,6 +849,7 @@ class SimpleDropdown(UiElement):
         super().draw(editor, pos)
 
     def handle_input(self, keycodes, mouse_buttons, input_handler):
+        modules.current_cursor_type = glfw.POINTING_HAND_CURSOR
         if input_handler.get_mouse_button_up(mouse_buttons.LEFT):
             self.open = not self.open
             self.old = True

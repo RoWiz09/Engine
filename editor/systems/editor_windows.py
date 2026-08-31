@@ -40,7 +40,7 @@ class SceneView(EditorUiWindow):
 
         self.rbo = gl.glGenRenderbuffers(1)
         gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, self.rbo)
-        gl.glRenderbufferStorage(gl.GL_RENDERBUFFER, gl.GL_DEPTH_COMPONENT24, math.ceil(self.view.size.x), math.ceil(self.view.size.y))
+        gl.glRenderbufferStorage(gl.GL_RENDERBUFFER, gl.GL_DEPTH_COMPONENT24, math.floor(self.view.size.x), math.floor(self.view.size.y))
         gl.glFramebufferRenderbuffer(gl.GL_FRAMEBUFFER, gl.GL_DEPTH_ATTACHMENT, gl.GL_RENDERBUFFER, self.rbo)
         gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, 0)
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
@@ -50,7 +50,7 @@ class SceneView(EditorUiWindow):
         gl.glFramebufferTexture2D(gl.GL_READ_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0, gl.GL_TEXTURE_2D, self.view.texture, 0)
 
         gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, self.rbo)
-        gl.glRenderbufferStorage(gl.GL_RENDERBUFFER, gl.GL_DEPTH_COMPONENT24, math.ceil(self.view.size.x), math.ceil(self.view.size.y))
+        gl.glRenderbufferStorage(gl.GL_RENDERBUFFER, gl.GL_DEPTH_COMPONENT24, math.floor(self.view.size.x), math.floor(self.view.size.y))
         gl.glFramebufferRenderbuffer(gl.GL_FRAMEBUFFER, gl.GL_DEPTH_ATTACHMENT, gl.GL_RENDERBUFFER, self.rbo)
         gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, 0)
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
@@ -134,12 +134,12 @@ class Inspector(EditorUiWindow):
                 return
             
             if parentField.get_value().object_data in get_children(data):
-                global_vars.logger("INSPECTOR").log_error("Cannot set the parent of an object to one of it's children!")
+                self.logger.log_error("Cannot set the parent of an object to one of it's children!")
                 parentField.data = None
                 return
             
             elif parentField.get_value().object_data == data:
-                global_vars.logger("INSPECTOR").log_error("Cannot parent an object to itself!")
+                self.logger.log_error("Cannot parent an object to itself!")
                 parentField.data = None
                 return
             data.transform.parent = parentField.get_value().object_data.transform
@@ -184,7 +184,7 @@ class Inspector(EditorUiWindow):
                         if disp_type == global_vars.engine_display_methods.DROP_FIELD:
                             field = DropField(self, self.renderable_width, 20, var_name, DragData(val, str(val)))
                             field.filter_ = lambda f, v=var: v.filter_input(f.object_data)
-                            field.drop_callback = lambda f, v=var: v.set_value(f.get_value().object_data)
+                            field.drop_callback = lambda f, v=var: v.set_value(f.get_value().object_data) if f.get_value() else v.set_value(None)
 
             for owner, funcs in component.editor_button_registry.items():
                 if not isinstance(component, owner):
