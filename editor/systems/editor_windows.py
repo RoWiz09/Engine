@@ -65,15 +65,8 @@ class SceneView(EditorUiWindow):
         
         super().draw(editor)   
 
-    def resize(self, new_width, new_height):
-        super().resize(new_width, new_height)     
+    def resize_elems(self, rebuild_elem_sprites = True):
         self.view.resize_to_fill_window()
-
-        text_img = render_window_label(self.name, int(self.draw_data.size.x))
-        self.text_img_size = text_img.size
-        gl.glBindTexture(gl.GL_TEXTURE_2D, self.name_texture)
-        gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA, *self.text_img_size, 0, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, text_img.tobytes())
-        gl.glBindTexture(gl.GL_TEXTURE_2D, 0)
         return self
     
 class Inspector(EditorUiWindow):
@@ -89,16 +82,9 @@ class Inspector(EditorUiWindow):
 
         self.locked = False
         
-    def resize(self, new_width, new_height):
-        old_renderable_width = self.draw_data.size.x - self.draw_data.padding.x * 2
-        new_renderable_width = new_width - self.draw_data.padding.x * 2
+    def resize_elems(self, rebuild_elem_sprites = True):
         for ui_obj in self.ui_elements:
-            width_ratio = ui_obj.size.x / old_renderable_width
-
-            ui_obj.resize(glm.vec2(width_ratio * new_renderable_width, ui_obj.size.y))
-        
-        super().resize(new_width, new_height)
-        self.update_max_scroll()
+            ui_obj.resize(glm.vec2(self.renderable_width, ui_obj.size.y), rebuild_elem_sprites)
     
     async def build_for_object(self, data):
         if TYPE_CHECKING:
@@ -247,14 +233,9 @@ class Hierarchy(EditorUiWindow):
         
         self.rebuild_windows()
 
-    def resize(self, new_width, new_height):
-        orig_window_width = self.draw_data.size.x - self.draw_data.padding.x * 2
-        self.create_object_button.resize(glm.vec2(new_width - self.draw_data.padding.x * 2, self.create_object_button.size.y))
-        for button in self.object_buttons:
-            orig_button_width_mod = orig_window_width - button.size.x
-            button.resize(glm.vec2((new_width - self.draw_data.padding.x * 2) - orig_button_width_mod, button.size.y))
-
-        super().resize(new_width, new_height)
+    def resize_elems(self, rebuild_elem_sprites = True):
+        for ui_elem in self.ui_elements:
+            ui_elem.resize(glm.vec2(self.renderable_width - ui_elem.pos_offset.x, ui_elem.size.y), rebuild_elem_sprites)
 
     async def build(self):
         self.object_buttons.clear()
@@ -329,11 +310,9 @@ class Scenes(EditorUiWindow):
         self.list_view.shown = False
         self.selected_scene = info
 
-    def resize(self, new_width, new_height):
-        self.list_view.resize(glm.vec2(new_width, new_height - 30) - self.draw_data.padding * 2)
-        self.horiz_group.resize(glm.vec2(new_width, 50) - self.draw_data.padding * 2)
-
-        super().resize(new_width, new_height)
+    def resize_elems(self, rebuild_elem_sprites = True):
+        self.list_view.resize(glm.vec2(self.renderable_width, self.renderable_height - 30), rebuild_elem_sprites)
+        self.horiz_group.resize(glm.vec2(self.renderable_width, 50), rebuild_elem_sprites)
 
 @dataclass
 class LogColor:
@@ -416,12 +395,9 @@ class ConsoleWindow(EditorUiWindow):
 
         self.update_max_scroll()
 
-    def resize(self, new_width, new_height):
-        super().resize(new_width, new_height)
-
-        with self.list_lock:
-            for elem in self.ui_elements:
-                elem.resize(glm.vec2(new_width, 12))
+    def resize_elems(self, rebuild_elem_sprites = True):
+        for ui_elem in self.ui_elements:
+            ui_elem.resize(glm.vec2(self.renderable_width, ui_elem.size.y), rebuild_elem_sprites)
     
     @classmethod
     def update(cls, data: str):

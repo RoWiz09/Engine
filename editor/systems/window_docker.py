@@ -30,6 +30,7 @@ class DockNodeEdges:
 
 class DockNode:
     CURSOR_AT_FRAME_START = global_vars.current_cursor_type
+    MIN_SPLIT = 0.05
 
     def __init__(self, docker: Docker):
         self.split_side: Optional[Split] = None
@@ -56,7 +57,7 @@ class DockNode:
 
     @split_ratio.setter
     def split_ratio(self, value):
-        self.__split_ratio = min(0.95, max(0.05, value))
+        self.__split_ratio = min(0.8, max(0.2, value))
 
     @property
     def is_root(self):
@@ -215,11 +216,26 @@ class DockNode:
 
         return self.resizing
 
+    def update_node(self):
+        if self.is_split():
+            self.child_a.update_node()
+            self.child_b.update_node()
+            return
+        
+        for window in self.windows:
+            window.resize(*window.draw_data.size, True, True)
+
     def update_size(self, input_handler: global_vars.Input, mouse_buttons: global_vars.MouseButtons):
-        if input_handler.get_mouse_button_up(mouse_buttons.LEFT):
+        if not input_handler.get_mouse_button(mouse_buttons.LEFT):
             Docker.INST.compute_node(self.parent, global_vars.editor_window)
             self.resizing = False
-            return
+            self.update_node()
+            if self.parent.child_a == self:
+                self.parent.child_b.update_node()
+            else:
+                self.parent.child_a.update_node()
+
+            return True
 
         source = self.parent.est_pos
         mouse_pos_relative = glm.vec2(input_handler.get_cursor_pos()) - source
@@ -235,7 +251,9 @@ class DockNode:
 
         if not within(self.parent.split_ratio - 0.05, split_ratio, self.parent.split_ratio + 0.05):
             self.parent.split_ratio = split_ratio
-            Docker.INST.compute_node(self.parent, global_vars.editor_window)
+            Docker.INST.compute_node(self.parent, global_vars.editor_window, (False, False))
+
+        return False
 
 class Docker:
     INST: Docker = None
@@ -298,7 +316,7 @@ class Docker:
 
         # self.compute_node(node, editor) 
 
-    def compute_node(self, node: DockNode, editor: Window):
+    def compute_node(self, node: DockNode, editor: Window, rebuild_elems: tuple[bool, bool] = (True, True)):
         """
         Computes a node tree, starting with `node`. Used when computing a whole tree from `Docker.root` would be inefficient or overkill.
 
@@ -320,7 +338,7 @@ class Docker:
 
         else:
             for editor_window in node.windows:
-                editor_window.resize(*node.est_size)
+                editor_window.resize(*node.est_size, *rebuild_elems)
                 editor_window.move(*node.est_pos)
 
         while len(cur_nodes) > 0:
@@ -337,7 +355,7 @@ class Docker:
 
             else:
                 for editor_window in node.windows:
-                    editor_window.resize(*node.est_size)
+                    editor_window.resize(*node.est_size, *rebuild_elems)
                     editor_window.move(*node.est_pos)
 
     def compute_layout(self, editor: Window):
@@ -349,7 +367,7 @@ class Docker:
         """
         self.root.est_size = glm.vec2(editor.size()) - glm.vec2(0, 20)
         self.root.est_pos = glm.vec2(0, 20)
-
+ 
         cur_nodes: list[DockNode] = []
         if self.root.is_split():
             cur_nodes.append(self.root.child_a)
@@ -524,8 +542,7 @@ class Docker:
 
     def validate_resize(self, input_handler: global_vars.Input, mouse_buttons: global_vars.MouseButtons):
         if self.current_resize:
-            self.current_resize.update_size(input_handler, mouse_buttons)
-            if not self.current_resize.resizing:
+            if self.current_resize.update_size(input_handler, mouse_buttons):
                 self.current_resize = None
 
         for node in self.nodes:

@@ -127,10 +127,10 @@ class ListView(UiElement):
         @property
         def value(self):
             return self.__val
-        
-        def resize(self, size):
-            super().resize(size)
-            self.__label.resize(size)
+
+        def resize(self, size, rebuild_sprite = True):
+            super().resize(size, rebuild_sprite)
+            self.__label.resize(size, rebuild_sprite)
 
         def handle_input(self, keycodes, mouse_buttons, input_handler):
             self.selected = input_handler.get_mouse_button_up(mouse_buttons.LEFT)
@@ -151,8 +151,8 @@ class ListView(UiElement):
 
         self.was_focused = False
     
-    def resize(self, size):
-        super().resize(size)
+    def resize(self, size, rebuild_sprite = True):
+        super().resize(size, rebuild_sprite)
         for elem in self.ui_elements:
             elem.resize(glm.vec2(self.size.x - self.padding.x * 2, elem.size.y))
 
@@ -260,9 +260,8 @@ class LabeledCheckbox(UiElement):
     def command(self, val):
         self.checkbox.command = val
 
-    def resize(self, size):
-        super().resize(size)
-
+    def resize(self, size, rebuild_sprite = True):
+        super().resize(size, rebuild_sprite)
         self.label.resize(size)
 
     def draw(self, editor, pos):
@@ -313,9 +312,8 @@ class LabeledInput(UiElement):
     def validate_command(self, val):
         self.input_field.validate_command = val
 
-    def resize(self, size):
-        super().resize(size)
-
+    def resize(self, size, rebuild_sprite = True):
+        super().resize(size, rebuild_sprite)
         self.input_field.resize(size - glm.vec2(self.label.size.x + 10, 0))
 
     def draw(self, editor, pos):
@@ -363,15 +361,16 @@ class DropdownButton(UiElement):
 
         self.y_padding = 5
 
-    def resize(self, size):
+    def resize(self, size, rebuild_sprite = True):
+        super().resize(size, rebuild_sprite)
         size.y = self.__base_height
-        super().resize(size)
+        super().resize(size, rebuild_sprite)
 
-        self.label.resize(size - glm.vec2(self.__base_height, 0))
-        self.dropdown.resize(glm.vec2(size.y))
+        self.label.resize(size - glm.vec2(self.__base_height, 0), rebuild_sprite)
+        self.dropdown.resize(glm.vec2(size.y), rebuild_sprite)
 
         for elem in self.elems:
-            elem.resize(self.size)
+            elem.resize(self.size, rebuild_sprite)
 
     def draw(self, editor, pos):
         if self.rect.pos != pos:

@@ -86,12 +86,6 @@ class TextElement(UiElement):
             self.old = False
 
         return super().draw(editor, pos)
-
-    def resize(self, size):
-        super().resize(size)
-
-        self.sprite = self.build_sprite()
-        self.rebuild_texture()
     
 class Button(UiElement):
     can_claim_focus = True
@@ -150,13 +144,9 @@ class Button(UiElement):
             if self.click_callback:
                 self.click_callback()
 
-    def resize(self, size):
-        super().resize(size)
-
-        self.sprite = self.build_sprite()
-        self.rebuild_texture()
-
-        self.label.resize(size)
+    def resize(self, size, rebuild_sprite = True):
+        super().resize(size, rebuild_sprite)
+        self.label.resize(size, rebuild_sprite)
 
 class TextButton(UiElement):
     can_claim_focus = True
@@ -317,12 +307,8 @@ class InputField(UiElement):
         
         return img
 
-    def resize(self, size):
-        super().resize(size)
-
-        self.sprite = self.build_sprite()
-        self.rebuild_texture()
-
+    def resize(self, size, rebuild_sprite = True):
+        super().resize(size, rebuild_sprite)
         self.label.resize(size)
 
     def draw(self, editor, pos):
@@ -556,13 +542,9 @@ class DropField(UiElement):
         
         return img
 
-    def resize(self, size):
-        super().resize(size)
-
-        self.sprite = self.build_sprite()
-        self.rebuild_texture()
-
-        self.label.resize(size)
+    def resize(self, size, rebuild_sprite = True):
+        super().resize(size, rebuild_sprite)
+        self.label.resize(size, rebuild_sprite)
 
     def draw(self, editor, pos):
         self.window = editor.window
@@ -612,12 +594,7 @@ class HorizontalLayout(UiElement):
         self.padding = glm.vec2(10, 10)
 
         self.elems = elems
-        height_ = height - self.padding.y * 2
-
-        for elem in elems:
-            width_ = ((width - self.padding.x * 2) - (self.padding.x * (len(elems) - 1))) / len(elems) 
-            elem.resize(glm.vec2(width_, height_))
-            elem.parent = self
+        self.update_positions()
 
         self.focused_elem = None
 
@@ -625,11 +602,11 @@ class HorizontalLayout(UiElement):
         self.rebuild_texture()
 
     def update_positions(self):
+        height_ = self.size.y - self.padding.y * 2
+        width_ = ((self.size.x - self.padding.x * 2) - (self.padding.x * (len(self.elems) - 1))) / len(self.elems)
         for elem in self.elems:
-            width_ = ((self.size.x - self.padding.x * 2) - (self.padding.x * (len(self.elems) - 1))) / len(self.elems) 
-            height_ = self.size.y - self.padding.y * 2
-            elem.resize(glm.vec2(width_, height_))
             elem.parent = self
+            elem.resize(glm.vec2(width_, height_))
 
     def set_padding(self, new_padding: glm.vec2):
         self.padding = new_padding
@@ -653,31 +630,13 @@ class HorizontalLayout(UiElement):
             (0, 0, int(self.rect.size.x), int(self.rect.size.y)), radius=7, fill=col)
         
         return img
-
-    def rebuild_elems(self):
-        size = self.size - self.padding * 2
-        for elem in self.elems:
-            width_ = ((size.x) - (self.padding.x * (len(self.elems) - 1))) / len(self.elems) 
-            height_ = size.y
-            elem.resize(glm.vec2(width_, height_))
-
-    def resize(self, size):
-        width = size.x
-        for elem in self.elems:
-            width_ = ((width - self.padding.x * 2) - (self.padding.x * (len(self.elems) - 1))) / len(self.elems) 
-            height_ = size.y - self.padding.y * 2
-            elem.resize(glm.vec2(width_, height_))
-
-        super().resize(size)
-
-        self.sprite = self.build_sprite()
-        self.rebuild_texture()
+    
+    def resize(self, size, rebuild_sprite = True):
+        super().resize(size, rebuild_sprite)
+        self.update_positions()
 
     def draw(self, editor, pos):
         super().draw(editor, pos)
-
-        if self.rect.pos != pos:
-            self.rect.move_to(glm.vec2(*pos))
 
         draw_offset = glm.vec2(*self.padding)
         for elem in self.elems:
@@ -780,7 +739,7 @@ def build_vec3_input(parent: EditorUiWindow | HorizontalLayout, vector: glm.vec3
             z_pos := InputField(None, 10, 10, "Z " + hint_extension, format_num(vector.z), type_=float)
         ]).set_padding(glm.vec2(5, 5))
 
-    def set_values(input_: InputField):
+    def set_values(_: InputField):
         vector.x = x_pos.get_value()
         vector.y = y_pos.get_value()
         vector.z = z_pos.get_value()

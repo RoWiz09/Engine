@@ -376,7 +376,7 @@ class EditorUiWindow:
         self.regen_stencil()
         return self
 
-    def resize(self, new_width: float, new_height: float):
+    def resize(self, new_width: float, new_height: float, rebuild_elems: bool = True, rebuild_elem_sprites: bool = True):
         """
             Sets the window size to `new_width`, `new_height`. 
             Returns this class for easier method chaining.
@@ -389,7 +389,14 @@ class EditorUiWindow:
 
         self.regen_stencil()
         self.update_max_scroll()
+
+        if rebuild_elems:
+            self.resize_elems(rebuild_elem_sprites)
+
         return self
+
+    def resize_elems(self, rebuild_elem_sprites: bool = True):
+        pass
     
     def focus(self):
         modules.input_handler().scroll_callback = self.handle_scroll
@@ -619,21 +626,25 @@ class UiElement:
         if self.resize_callback:
             self.resize_callback(self)
 
-    def resize(self, size: glm.vec2):
+    def resize(self, size: glm.vec2, rebuild_sprite: bool = True):
         size = glm.vec2(
-            max(self.min_size.x, min(size.x, self.max_size.x)), 
-            max(self.min_size.y, min(size.y, self.max_size.y))
+            glm.clamp(size.x, self.min_size.x, self.max_size.x), 
+            glm.clamp(size.y, self.min_size.y, self.max_size.y)
         )
 
         self.size = size
         self.rect.resize(size)
 
-        self.sprite = self.build_sprite()
-        if self.rebuild_texture_on_resize:
-            self.rebuild_texture()
+        if rebuild_sprite:
+            self.sprite = self.build_sprite()
+            if self.rebuild_texture_on_resize:
+                self.rebuild_texture()
 
         if self.resize_callback:
             self.resize_callback(self)
+
+    def finish_resize(self):
+        pass
 
     def draw(self, editor: Window, pos: glm.vec2):
         global VAO
