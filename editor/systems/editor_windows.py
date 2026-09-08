@@ -81,15 +81,32 @@ class Inspector(EditorUiWindow):
         self.regen_stencil()
 
         self.locked = False
+        self.open_data: GameObject = None
         
     def resize_elems(self, rebuild_elem_sprites = True):
         for ui_obj in self.ui_elements:
             ui_obj.resize(glm.vec2(self.renderable_width, ui_obj.size.y), rebuild_elem_sprites)
+
+    def open_component_popup(self, source: glm.vec2):
+        popup = open_popup(source)
+        def set_category(popup_: Popup, component_cat: str):
+            popup_.ui_elements.clear()
+            for component in global_vars.behavior.component_category_registry[component_cat]:
+                button = Button(popup_, 150, 20, component.__name__, None)
+                button.click_callback = lambda o=self.open_data, c=component: o.add_behavior(c(o))
+
+        for component_category in global_vars.behavior.component_category_registry.keys():
+            category_button = Button(popup, 150, 20, component_category, None)
+            category_button.click_callback = lambda c=component_category, p=popup: set_category(p, c) 
+
+        popup.register()
     
     async def build_for_object(self, data):
         if TYPE_CHECKING:
             assert isinstance(self.object_type, type[GameObject])
             assert isinstance(data, GameObject)
+
+        self.open_data = data
 
         def set_name(name_in: InputField):
             data.name = name_in.get_value()
@@ -181,7 +198,8 @@ class Inspector(EditorUiWindow):
         
             HorizontalLine(self)
 
-        Button(self, self.renderable_width, 20, "Add Behavior", None)
+        add_comp_button = Button(self, self.renderable_width, 20, "Add Behavior", None)
+        add_comp_button.click_callback = lambda b = add_comp_button: self.open_component_popup(b.rect.pos)
 
     async def build(self, data):
         self.scroll = 0.0

@@ -51,6 +51,9 @@ class DockNode:
         self.edges = DockNodeEdges()
         self.resizing = False
 
+        self.should_render = True
+        self.docker = docker
+
     @property
     def split_ratio(self):
         return self.__split_ratio
@@ -79,6 +82,33 @@ class DockNode:
             self.child_b.parent = self
 
         self.windows = node.windows.copy()
+
+    def del_split(self, destroy: Child):
+        self.split_side = None
+        self.__split_ratio = None
+
+        self.docker.nodes.remove(self.child_a)
+        self.docker.nodes.remove(self.child_b)
+
+        if destroy == "child_a":
+            self.windows = self.child_b.windows.copy()
+            self.split_side = self.child_b.split_side
+            self.__split_ratio = self.child_b.split_ratio
+
+            self.child_a = self.child_b.child_a
+            self.child_b = self.child_b.child_b
+        else:
+            self.windows = self.child_a.windows.copy()
+            self.split_side = self.child_a.split_side
+            self.__split_ratio = self.child_a.split_ratio
+
+            self.child_a = self.child_a.child_a
+            self.child_b = self.child_a.child_b
+
+        self.child_a.parent = self
+        self.child_b.parent = self
+
+        self.docker.compute_node(self, global_vars.editor_window)
 
     def split_node(self, node_a: DockNode, node_b: DockNode, split: Split):
         self.child_a = node_a
@@ -130,8 +160,8 @@ class DockNode:
             window.dock_parent = self
 
         input_ = modules.input_handler()
-
         mouse_pos = glm.vec2(*input_.mouse_pos)
+
         pos = self.est_pos + glm.vec2(2, 2)
         for window, button in self.windows.items():
             if button == None:
@@ -142,20 +172,11 @@ class DockNode:
                 tab.set_selected(windows[self.selected_window] == window)
                 tab.draw(editor, pos)
                 pos.x += tab.size.x
-
-                if tab.rect.collide_point(mouse_pos) and input_.get_mouse_button_down(modules.mouse_buttons.LEFT):
-                    self.selected_window = windows.index(window)
-
                 continue
             
             button.set_selected(windows[self.selected_window] == window)
             button.draw(editor, pos)
             pos.x += button.size.x
-
-            if button.rect.collide_point(mouse_pos):
-                global_vars.current_cursor_type = glfw.POINTING_HAND_CURSOR
-                if input_.get_mouse_button_down(modules.mouse_buttons.LEFT):
-                    self.selected_window = windows.index(window)
 
         if window.rect.collide_point(mouse_pos):
             return True
@@ -255,6 +276,12 @@ class DockNode:
 
         return False
 
+    @property
+    def active_window(self) -> EditorUiWindow:
+        if not self.selected_window is None:
+            return list(self.windows.keys())[self.selected_window]
+        return None
+
 class Docker:
     INST: Docker = None
     def __init__(self):
@@ -263,6 +290,7 @@ class Docker:
         self.root = DockNode(self)
 
         self.current_resize = None
+        self.holding_window: tuple[Window, Tab, DockNode] = None
 
     def get_node_info(self, node: DockNode, editor: Window):
         if not node.parent:
@@ -415,7 +443,8 @@ class Docker:
         
         # Flag the window as docked.
         setattr(window, "docked", True)
-        WindowDrawer.INST.floating_windows.remove(window)
+        if window in WindowDrawer.INST.floating_windows:
+            WindowDrawer.INST.floating_windows.remove(window)
         
         # If there is a split, handle it accordingly
         if split:
@@ -433,7 +462,7 @@ class Docker:
                 child_a = DockNode(self)
                 child_b = DockNode(self)
 
-                if node.windows != []:
+                if node.windows != {}:
                     if split in ("top", "left"):
                         child_b.windows = node.windows
                         child_b.selected_window = node.selected_window
@@ -441,7 +470,8 @@ class Docker:
                     else:
                         child_a.windows = node.windows
                         child_a.selected_window = node.selected_window
-                    node.windows = []
+
+                    node.windows = {}
 
                 if split in ("top", "left"):
                     child_a.windows[window] = None
@@ -485,8 +515,13 @@ class Docker:
             node.windows[window] = None
             node.selected_window = len(node.windows) - 1
 
-        return node
+        try:
+            window.resize(*node.est_size)
+            window.move(*node.est_pos)
+        except:
+            pass
 
+        return node
     
     def undock(self, node: DockNode, window: EditorUiWindow):
         """
@@ -548,3 +583,83 @@ class Docker:
         for node in self.nodes:
             if node.handle_resize(input_handler, mouse_buttons):
                 self.current_resize = node
+
+    def find_and_dock_window(self, original_node: DockNode, window: EditorUiWindow, mouse_pos: glm.vec2):
+        def dock_window(split: SplitDirection = None):
+            window_index = list(original_node.windows.keys()).index(window)
+            if original_node.selected_window >= window_index:
+                original_node.selected_window -= 1
+
+            original_node.windows.pop(window)
+            self.dock(node, window, split)
+
+            if len(original_node.windows) == 0:
+                parent = original_node.parent
+                child_node = parent.get_child(original_node)
+                parent.del_split(child_node)
+
+        for node in self.nodes:
+            if node.is_split(): continue
+            if not node.active_window.rect.collide_point(mouse_pos): continue
+
+            x_offset = node.est_size.x * 0.25
+            y_offset = node.est_size.y * 0.25
+
+            bottom_of_bar = node.est_pos.y + BASE_OFFSET
+
+            left = node.est_pos.x + x_offset
+            right = node.est_pos.x + node.est_size.x - x_offset
+
+            top = node.est_pos.y + BASE_OFFSET + y_offset
+            bottom = node.est_pos.y + node.est_size.y - y_offset
+
+            if node.est_pos.y < mouse_pos.y < bottom_of_bar:
+                dock_window()
+                break
+
+            elif node.est_pos.x < mouse_pos.x < left:
+                dock_window("left")
+                break
+
+            elif right < mouse_pos.x < node.est_pos.x + node.est_size.x:
+                dock_window("right")
+                break
+
+            self.compute_node(node, global_vars.editor_window)
+
+    def validate_drag(self, input_handler: global_vars.Input, mouse_buttons: global_vars.MouseButtons):
+        if self.current_resize:
+            return  # Can't drag and resize at the same time!
+        
+        mouse_pos = glm.vec2(*input_handler.mouse_pos)
+        for node in self.nodes:
+            windows = list(node.windows.keys())
+            # print(node.windows)
+
+            for window, tab in node.windows.items():
+                if not tab:
+                    continue
+                
+                if tab.rect.collide_point(mouse_pos):
+                    global_vars.current_cursor_type = glfw.POINTING_HAND_CURSOR
+                    if input_handler.get_mouse_button_down(mouse_buttons.LEFT):
+                        self.holding_window = (window, tab, node)
+                        break
+            else:
+                continue
+
+            break
+
+        if self.holding_window:
+            window, tab, node = self.holding_window
+            windows = list(node.windows.keys())
+            if not input_handler.get_mouse_button_up(mouse_buttons.LEFT): return
+
+            if tab.rect.collide_point(mouse_pos):
+                node.selected_window = windows.index(window)
+                self.holding_window = None
+
+            else:
+                self.find_and_dock_window(node, window, mouse_pos)
+                self.holding_window = None
+            

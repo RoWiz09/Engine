@@ -34,6 +34,8 @@ if TYPE_CHECKING:
     engine_data_type: type[DataType] = None
     engine_display_methods: type[DisplayMethods] = None
 
+    behavior: type[Behavior] = None
+
 else:
     logger_module: type = None
     logger: type = None
@@ -48,6 +50,8 @@ else:
 
     engine_data_type: type = None
     engine_display_methods: type = None
+
+    behavior = None
 
 from argparse import ArgumentParser
 
@@ -67,7 +71,7 @@ GL_FUNC_LOCK = threading.Lock()
 MAIN_PROC = False
 
 def get_modules(base_path: str):
-    global logger, logger_module, scene_manager, input_handler, key_codes, mouse_buttons, editor_field, pack, engine_data_type, engine_display_methods
+    global logger, logger_module, scene_manager, input_handler, key_codes, mouse_buttons, editor_field, pack, engine_data_type, engine_display_methods, behavior
     if base_path not in sys.path:
         sys.path.insert(0, base_path)
 
@@ -100,6 +104,8 @@ def get_modules(base_path: str):
 
     engine_data_type = getattr(sys.modules["ghost_engine.datatypes.engine_data_type"], "DataType")
     engine_display_methods = getattr(sys.modules["ghost_engine.datatypes.engine_data_type"], "DisplayMethods")
+
+    behavior = getattr(sys.modules["ghost_engine.scripting.behavior"], "Behavior")
 
     return logger, scene_manager, input_handler
 

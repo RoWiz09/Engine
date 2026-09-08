@@ -118,6 +118,7 @@ class WindowDrawer:
     def handle_input(self, key_codes: type[KeyCodes], mouse_buttons: type[MouseButtons], input_handler: Input):
         mouse_pos = glm.vec2(input_handler.mouse_pos)
         self.docker.INST.validate_resize(input_handler, mouse_buttons)
+        self.docker.INST.validate_drag(input_handler, mouse_buttons)
 
         if self.top_bar.rect.collide_point(mouse_pos):
             self.top_bar.handle_input(key_codes, mouse_buttons, input_handler)
