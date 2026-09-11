@@ -43,6 +43,7 @@ class MenuBar(UiElement):
             self.text.draw(editor, pos)
 
         def handle_input(self, keycodes, mouse_buttons, input_handler):
+            super().handle_input(keycodes, mouse_buttons, input_handler)
             if input_handler.get_mouse_button_up(mouse_buttons.LEFT):
                 open_popup(self.rect.bottomleft).set_children(self.elems).register()
 
@@ -83,6 +84,7 @@ class MenuBar(UiElement):
             pos.x += menu.size.x + 5
 
     def handle_input(self, keycodes, mouse_buttons, input_handler):
+        super().handle_input(keycodes, mouse_buttons, input_handler)
         for elem in self.menus.values():
             if elem.rect.collide_point(glm.vec2(input_handler.mouse_pos)):
                 elem.handle_input(keycodes, mouse_buttons, input_handler)
@@ -133,6 +135,7 @@ class ListView(UiElement):
             self.__label.resize(size, rebuild_sprite)
 
         def handle_input(self, keycodes, mouse_buttons, input_handler):
+            super().handle_input(keycodes, mouse_buttons, input_handler)
             self.selected = input_handler.get_mouse_button_up(mouse_buttons.LEFT)
             return self.selected
 
@@ -213,6 +216,7 @@ class ListView(UiElement):
         return super().lose_focus()
 
     def handle_input(self, keycodes, mouse_buttons, input_handler):
+        super().handle_input(keycodes, mouse_buttons, input_handler)
         if self.focused_elem:
             if not self.focused_elem.rect.collide_point(glm.vec2(*input_handler.mouse_pos)):
                 self.focused_elem.lose_focus()
@@ -254,11 +258,11 @@ class LabeledCheckbox(UiElement):
         self.checkbox = Checkbox(None, state)
 
     @property
-    def command(self):
-        return self.checkbox.command
-    @command.setter
-    def command(self, val):
-        self.checkbox.command = val
+    def on_value_changed(self):
+        return self.checkbox.on_value_changed
+    @on_value_changed.setter
+    def on_value_changed(self, val):
+        self.checkbox.on_value_changed = val
 
     def resize(self, size, rebuild_sprite = True):
         super().resize(size, rebuild_sprite)
@@ -299,11 +303,11 @@ class LabeledInput(UiElement):
         del self.ui_elements
 
     @property
-    def command(self):
-        return self.input_field.command
-    @command.setter
-    def command(self, val):
-        self.input_field.command = val
+    def on_value_change(self):
+        return self.input_field.on_value_change
+    @on_value_change.setter
+    def on_value_change(self, val):
+        self.input_field.on_value_change = val
 
     @property
     def validate_command(self):
@@ -328,6 +332,7 @@ class LabeledInput(UiElement):
             self.focused_elem = None
         
     def handle_input(self, keycodes, mouse_buttons, input_handler):
+        super().handle_input(keycodes, mouse_buttons, input_handler)
         if self.input_field.rect.collide_point(glm.vec2(input_handler.mouse_pos)) and not self.focused_elem:
             self.focused_elem = self.input_field
 
@@ -335,6 +340,9 @@ class LabeledInput(UiElement):
             self.hold_focus = self.input_field.hold_focus
             self.input_field.handle_input(keycodes, mouse_buttons, input_handler)
             self.input_field.focus()
+
+    def get_value(self):
+        return self.input_field.get_value()
 
 class DropdownButton(UiElement):
     can_claim_focus = True
@@ -409,6 +417,7 @@ class DropdownButton(UiElement):
             self.focused_elem = None
 
     def handle_input(self, keycodes, mouse_buttons, input_handler):
+        super().handle_input(keycodes, mouse_buttons, input_handler)
         mouse_pos = glm.vec2(input_handler.get_cursor_pos())
 
         if self.label.rect.collide_point(mouse_pos) and self.focused_elem != self.label:

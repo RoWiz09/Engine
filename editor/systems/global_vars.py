@@ -4,7 +4,7 @@ import glfw
 
 import threading
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeAlias, Any
 if TYPE_CHECKING:
     from ghost_engine.core.logger import Logger
     from ghost_engine.core.scene_manager import SceneManager
@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from ghost_engine.datatypes.engine_data_type import DataType, DisplayMethods
 
     from ..editor import Window
+    from ghost_engine.action import Action
 
 
     logger_module: LoggerModule = None
@@ -35,6 +36,8 @@ if TYPE_CHECKING:
     engine_display_methods: type[DisplayMethods] = None
 
     behavior: type[Behavior] = None
+    behavior_alias: TypeAlias = Behavior
+    action: type[Action] = None
 
 else:
     logger_module: type = None
@@ -51,7 +54,9 @@ else:
     engine_data_type: type = None
     engine_display_methods: type = None
 
-    behavior = None
+    behavior: type = None
+    behavior_alias: TypeAlias = Any
+    action: type = None
 
 from argparse import ArgumentParser
 
@@ -71,7 +76,9 @@ GL_FUNC_LOCK = threading.Lock()
 MAIN_PROC = False
 
 def get_modules(base_path: str):
-    global logger, logger_module, scene_manager, input_handler, key_codes, mouse_buttons, editor_field, pack, engine_data_type, engine_display_methods, behavior
+    global logger, logger_module, scene_manager, input_handler, key_codes, mouse_buttons, editor_field, pack
+    global engine_data_type, engine_display_methods, behavior, action
+
     if base_path not in sys.path:
         sys.path.insert(0, base_path)
 
@@ -106,6 +113,7 @@ def get_modules(base_path: str):
     engine_display_methods = getattr(sys.modules["ghost_engine.datatypes.engine_data_type"], "DisplayMethods")
 
     behavior = getattr(sys.modules["ghost_engine.scripting.behavior"], "Behavior")
+    action = getattr(sys.modules["ghost_engine.action"], "Action")
 
     return logger, scene_manager, input_handler
 

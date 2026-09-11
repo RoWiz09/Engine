@@ -19,6 +19,7 @@ from .scripting.behavior import *
 
 from .error_codes import *
 from .decorators import *
+from .action import *
 from .object import *
 from .math import *
 

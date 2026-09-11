@@ -66,8 +66,7 @@ class SceneView(EditorUiWindow):
         super().draw(editor)   
 
     def resize_elems(self, rebuild_elem_sprites = True):
-        self.view.resize_to_fill_window()
-        return self
+        self.view.resize(glm.vec2(self.renderable_width, self.renderable_height), rebuild_elem_sprites)
     
 class Inspector(EditorUiWindow):
     name = "Inspector"
@@ -89,11 +88,20 @@ class Inspector(EditorUiWindow):
 
     def open_component_popup(self, source: glm.vec2):
         popup = open_popup(source)
+
         def set_category(popup_: Popup, component_cat: str):
             popup_.ui_elements.clear()
+            def add_comp(object_: GameObject, c):
+                object_.add_behavior(c(object_))
+                popup.deregister()
+
+                self.ui_elements.clear()
+                asyncio.run(self.build_for_object(object_))
+                self.update_max_scroll()
+
             for component in global_vars.behavior.component_category_registry[component_cat]:
                 button = Button(popup_, 150, 20, component.__name__, None)
-                button.click_callback = lambda o=self.open_data, c=component: o.add_behavior(c(o))
+                button.click_callback = lambda o=self.open_data, c=component: add_comp(o, c)
 
         for component_category in global_vars.behavior.component_category_registry.keys():
             category_button = Button(popup, 150, 20, component_category, None)
@@ -114,7 +122,7 @@ class Inspector(EditorUiWindow):
 
         # Name Data
         name_in = InputField(self, self.renderable_width, 30, hint="Object Name...", starting_message=data.name)
-        name_in.command = lambda n=name_in: set_name(n)
+        name_in.on_value_change = lambda n=name_in: set_name(n)
         name_in.default_val = ""
 
         HorizontalLine(self)
@@ -147,18 +155,24 @@ class Inspector(EditorUiWindow):
                 return
             data.transform.parent = parentField.get_value().object_data.transform
             Hierarchy.rebuild_windows()
-        parentField.drop_callback = try_set_parent
+        parentField.on_value_change = try_set_parent
         build_vec3_input(self, data.transform.localpos, "Position")
         build_vec3_input(self, data.transform.localrot, "Rotation")
         build_vec3_input(self, data.transform.scale, "Size")
 
         HorizontalLine(self)
 
-        format_name = lambda f: func.__name__.replace("_", " ").title()
+        format_name = lambda f: f.__name__.replace("_", " ").title()
+
+        def open_component_menu(name: UiElement, component: global_vars.behavior_alias):
+            popup = open_popup(name.rect.pos)
+            checkbox = LabeledCheckbox(popup, 100, 20, "Enabled:", component.enabled)
+            checkbox.on_value_changed += lambda f: setattr(component, "enabled", f.get_value())
+            popup.register()
 
         for component in data.behaviors:
             comp_class = type(component)
-            TextElement(self, comp_class.__name__, self.renderable_width, 30)
+            TextElement(self, comp_class.__name__, self.renderable_width, 30).on_right_click += lambda n, c=component: open_component_menu(n, c)
 
             for var_name, var_data in vars(comp_class).items():
                 if isinstance(var_data, global_vars.editor_field):
@@ -168,16 +182,16 @@ class Inspector(EditorUiWindow):
 
                     elif var_data.type == float:
                         input_field = LabeledInput(self, self.renderable_width, 20, var_name, str(var), float)
-                        input_field.command = lambda f, c=component, s=var_name: setattr(c, s, f.get_value() if f.get_value() else 1.0)
+                        input_field.on_value_change += lambda f, c=component, s=var_name: setattr(c, s, f.get_value() if f.get_value() else 1.0)
                         input_field.validate_command = InputField.validate_float
 
                     elif var_data.type == str:
                         input_field = LabeledInput(self, self.renderable_width, 20, var_name, var, str)
-                        input_field.command = lambda f, c=component, s=var_name: setattr(c, s, f.get_value())
+                        input_field.on_value_change += lambda f, c=component, s=var_name: setattr(c, s, f.get_value())
                     
                     elif var_data.type == bool:
                         checkbox = LabeledCheckbox(self, self.renderable_width, 20, var_name, var)
-                        checkbox.command = lambda f, c=component, s=var_name: setattr(c, s, f.get_value())
+                        checkbox.on_value_changed += lambda f, comp=component, name=var_name: setattr(comp, name, f.get_value())
 
                     elif issubclass(var_data.type, global_vars.engine_data_type):
                         if TYPE_CHECKING:
@@ -187,7 +201,15 @@ class Inspector(EditorUiWindow):
                         if disp_type == global_vars.engine_display_methods.DROP_FIELD:
                             field = DropField(self, self.renderable_width, 20, var_name, DragData(val, str(val)))
                             field.filter_ = lambda f, v=var: v.filter_input(f.object_data)
-                            field.drop_callback = lambda f, v=var: v.set_value(f.get_value().object_data) if f.get_value() else v.set_value(None)
+                            field.on_value_change += lambda f, v=var: v.set_value(f.get_value().object_data) if f.get_value() else v.set_value(None)
+
+                        elif disp_type == global_vars.engine_display_methods.INT_INPUT:
+                            field = LabeledInput(self, self.renderable_width, 20, var_name, str(val), int)
+                            field.on_value_change += lambda f, v=var: v.set_value(f.get_value()) if f.get_value() else v.set_value(0)
+
+                        elif disp_type == global_vars.engine_display_methods.FLOAT_INPUT:
+                            field = LabeledInput(self, self.renderable_width, 20, var_name, str(val), float)
+                            field.on_value_change += lambda f, v=var: v.set_value(f.get_value()) if f.get_value() else v.set_value(0.0)
 
             for owner, funcs in component.editor_button_registry.items():
                 if not isinstance(component, owner):

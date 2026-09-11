@@ -250,12 +250,6 @@ class DockNode:
         if not input_handler.get_mouse_button(mouse_buttons.LEFT):
             Docker.INST.compute_node(self.parent, global_vars.editor_window)
             self.resizing = False
-            self.update_node()
-            if self.parent.child_a == self:
-                self.parent.child_b.update_node()
-            else:
-                self.parent.child_a.update_node()
-
             return True
 
         source = self.parent.est_pos

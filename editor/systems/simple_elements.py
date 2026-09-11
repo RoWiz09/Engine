@@ -139,6 +139,7 @@ class Button(UiElement):
         self.label.draw(editor, pos + self.pos_offset)
     
     def handle_input(self, keycodes, mouse_buttons, input_handler):
+        super().handle_input(keycodes, mouse_buttons, input_handler)
         modules.current_cursor_type = glfw.POINTING_HAND_CURSOR
         if input_handler.get_mouse_button_up(mouse_buttons.LEFT):
             if self.click_callback:
@@ -215,6 +216,7 @@ class TextButton(UiElement):
         return super().draw(editor, pos)
 
     def handle_input(self, keycodes, mouse_buttons, input_handler):
+        super().handle_input(keycodes, mouse_buttons, input_handler)
         modules.current_cursor_type = glfw.POINTING_HAND_CURSOR
         if input_handler.get_mouse_button_up(mouse_buttons.LEFT):
             if self.click_callback:
@@ -282,7 +284,7 @@ class InputField(UiElement):
 
         self.validate_command = None
         self.default_val = None
-        self.command = None
+        self.on_value_change = modules.action()
         self.run_command_when_empty = True
         self.type_ = type_
 
@@ -371,7 +373,7 @@ class InputField(UiElement):
             self.old = True
 
         if self.old:
-            self.command(self)
+            self.on_value_change(self)
 
     def input_handler(self, key: int):
         char = chr(key)
@@ -388,8 +390,8 @@ class InputField(UiElement):
             self.old = True
 
         if self.old:
-            if self.command:
-                self.command(self)
+            if self.on_value_change:
+                self.on_value_change(self)
 
     def extras_handler(self, key, scancode, action, mods):
         if action == glfw.PRESS or action == glfw.REPEAT:
@@ -398,16 +400,17 @@ class InputField(UiElement):
                 self.selection_idx = max(0, self.selection_idx-1)
                 self.old = True
 
-                if self.command:
+                if self.on_value_change:
                     if self.run_command_when_empty and not self.message:
-                        self.command(self)
+                        self.on_value_change(self)
                     elif self.message:
-                        self.command(self)
+                        self.on_value_change(self)
             
             if key == glfw.KEY_ESCAPE:
                 self.lose_focus()
 
     def handle_input(self, keycodes, mouse_buttons, input_handler):
+        super().handle_input(keycodes, mouse_buttons, input_handler)
         modules.current_cursor_type = glfw.IBEAM_CURSOR
         mouse_up = input_handler.get_mouse_button_up(mouse_buttons.LEFT)
         collides = self.rect.collide_point(glm.vec2(*input_handler.mouse_pos))
@@ -438,7 +441,7 @@ class Checkbox(UiElement):
     max_size = glm.vec2(20, 20)
     def __init__(self, parent, state: bool = False, **kwargs):
         self.state = state
-        self.command = None
+        self.on_value_changed = modules.action()
 
         super().__init__(parent, 20, 20, **kwargs)
 
@@ -459,11 +462,12 @@ class Checkbox(UiElement):
         return img
     
     def handle_input(self, keycodes, mouse_buttons, input_handler):
+        super().handle_input(keycodes, mouse_buttons, input_handler)
         modules.current_cursor_type = glfw.POINTING_HAND_CURSOR
         if input_handler.get_mouse_button_up(mouse_buttons.LEFT):
             self.state = not self.state
-            if self.command:
-                self.command(self)
+            if self.on_value_changed:
+                self.on_value_changed(self)
 
             self.sprite = self.build_sprite()
             self.rebuild_texture()
@@ -511,7 +515,7 @@ class DropField(UiElement):
         self.was_focused_last = self.focused
 
         self.type_ = type_
-        self.drop_callback = None
+        self.on_value_change = modules.action()
         self.filter_ = None
 
     def drop_drag_data(self, drag_data):
@@ -521,8 +525,8 @@ class DropField(UiElement):
         self.data = drag_data
         self.old = True
 
-        if self.drop_callback:
-            self.drop_callback(self)
+        if self.on_value_change:
+            self.on_value_change(self)
 
     def build_sprite(self) -> Image.Image:
         """
@@ -575,12 +579,13 @@ class DropField(UiElement):
         return self.data
     
     def handle_input(self, keycodes, mouse_buttons, input_handler):
+        super().handle_input(keycodes, mouse_buttons, input_handler)
         modules.current_cursor_type = glfw.POINTING_HAND_CURSOR
 
         if input_handler.get_mouse_button_down(mouse_buttons.RIGHT):
             self.data = None
-            if self.drop_callback:
-                self.drop_callback(self)
+            if self.on_value_change:
+                self.on_value_change(self)
             self.old = True
 
     def get_drag_data(self):
@@ -644,6 +649,7 @@ class HorizontalLayout(UiElement):
             draw_offset.x += elem.size.x + self.padding.x
 
     def handle_input(self, keycodes, mouse_buttons, input_handler):
+        super().handle_input(keycodes, mouse_buttons, input_handler)
         if self.focused_elem:
             self.focused_elem.handle_input(keycodes, mouse_buttons, input_handler)
             if self.focused_elem:
@@ -721,6 +727,7 @@ class Tab(UiElement):
         self.selected = state
 
     def handle_input(self, keycodes, mouse_buttons, input_handler):
+        super().handle_input(keycodes, mouse_buttons, input_handler)
         modules.current_cursor_type = glfw.POINTING_HAND_CURSOR
         return super().handle_input(keycodes, mouse_buttons, input_handler)
 
@@ -746,17 +753,17 @@ def build_vec3_input(parent: EditorUiWindow | HorizontalLayout, vector: glm.vec3
 
     x_pos.validate_command = InputField.validate_float            
     x_pos.run_command_when_empty = False
-    x_pos.command = set_values
+    x_pos.on_value_change += set_values
     x_pos.default_val = 0.0
 
     y_pos.validate_command = InputField.validate_float            
     y_pos.run_command_when_empty = False
-    y_pos.command = set_values
+    y_pos.on_value_change += set_values
     y_pos.default_val = 0.0
 
     z_pos.validate_command = InputField.validate_float            
     z_pos.run_command_when_empty = False
-    z_pos.command = set_values
+    z_pos.on_value_change += set_values
     z_pos.default_val = 0.0
 
 class SimpleDropdown(UiElement):
@@ -808,6 +815,7 @@ class SimpleDropdown(UiElement):
         super().draw(editor, pos)
 
     def handle_input(self, keycodes, mouse_buttons, input_handler):
+        super().handle_input(keycodes, mouse_buttons, input_handler)
         modules.current_cursor_type = glfw.POINTING_HAND_CURSOR
         if input_handler.get_mouse_button_up(mouse_buttons.LEFT):
             self.open = not self.open

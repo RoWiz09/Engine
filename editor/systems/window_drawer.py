@@ -20,11 +20,13 @@ from dataclasses import dataclass
 if TYPE_CHECKING:
     from ..editor import Window
     from ghost_engine.core.input import KeyCodes, MouseButtons, Input
+    from ghost_engine.action import Action
 
 else:
     KeyCodes: TypeAlias = Any
     MouseButtons: TypeAlias = Any
     Input: TypeAlias = Any
+    Action: TypeAlias = Any
 
 from dataclasses import dataclass
 import weakref
@@ -106,7 +108,7 @@ class WindowDrawer:
         for window in self.floating_windows.copy():
             window.draw(editor)
 
-            if self.focused_window and self.focused_window.focused_elem:
+            if self.focused_window and self.focused_window.focused_elem and not issubclass(window.__class__, Popup):
                 continue
 
             if window.rect.collide_point(glm.vec2(*editor.input_handler.mouse_pos)):
@@ -560,7 +562,7 @@ class EditorUiWindow:
         self.scroll = max(0.0, min(self.scroll - y_off * self.scroll_sensitivity, self.max_scroll))
         
 class UiElement:
-    can_claim_focus: bool = False
+    can_claim_focus: bool = True
     hold_focus: bool = False
 
     min_size = glm.vec2(1)
@@ -608,6 +610,10 @@ class UiElement:
         self.active = True
         self.shown = True
 
+        self.on_left_click: Action = modules.action()
+        self.on_right_click: Action = modules.action()
+        self.on_middle_click: Action = modules.action()
+
     def update_rect(self, new_pos: glm.vec2):
         self.rect.move_to(new_pos)
 
@@ -641,7 +647,7 @@ class UiElement:
             if self.rebuild_texture_on_resize:
                 self.rebuild_texture()
 
-        if self.resize_callback:
+        if self.resize_callback and rebuild_sprite:
             self.resize_callback(self)
 
     def finish_resize(self):
@@ -680,7 +686,14 @@ class UiElement:
         return self.size.y + self.pos_offset.y
     
     def handle_input(self, keycodes: type[KeyCodes], mouse_buttons: type[MouseButtons], input_handler: Input):
-        pass
+        if input_handler.get_mouse_button_up(mouse_buttons.LEFT):
+            self.on_left_click(self)
+
+        if input_handler.get_mouse_button_up(mouse_buttons.RIGHT):
+            self.on_right_click(self)
+
+        if input_handler.get_mouse_button_up(mouse_buttons.MIDDLE):
+            self.on_middle_click(self)
 
     def focus(self):
         self.focused = True
