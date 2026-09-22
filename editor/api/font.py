@@ -1,7 +1,7 @@
 from PIL import Image, ImageFont, ImageDraw, ImageText
 from typing import Literal, TypeAlias
 
-from . import global_vars as modules
+from core import global_vars as modules
 
 from enum import Enum
 from pyglm import glm
@@ -17,6 +17,28 @@ class TextStyle(Enum):
     BOLD = BOLD_FONT
     ITALICS = ITAL_FONT
 
+class TextAttributes(Enum):
+    STANDARD = 0
+    WRAPPING = 1
+    TRUNCATED = 2
+
+def truncate_text_to_width(text: str, max_width, style: TextStyle, size: int = None, suffix: str="..."):
+    font = style.value
+    if size:
+        font = style.value.font_variant(size=size)
+
+    if font.getlength(text) <= max_width:
+        return text
+    
+    suffix_width = font.getlength(suffix)
+    target_width = max_width - suffix_width
+    
+    truncated = text
+    while len(truncated) > 0 and font.getlength(truncated) > target_width:
+        truncated = truncated[:-1]
+        
+    return truncated.rstrip() + suffix
+
 def render_window_label(text: str, window_width: int):
     """
         NOTICE: THIS METHOD CURRENTLY DOESN'T IMPLEMENT TEXT WRAPPING!
@@ -31,7 +53,7 @@ def render_window_label(text: str, window_width: int):
 
     return img
 
-def render_text(text: str, width: int, height: int, x_off: int, y_off: int, style: TextStyle, anchor_point: AnchorPoints = "mm", size: int = None, color: tuple[int, int, int] = (0, 0, 0), enable_wrapping: bool = True):    
+def render_text(text: str, width: int, height: int, x_off: int, y_off: int, style: TextStyle, anchor_point: AnchorPoints = "mm", size: int = None, color: tuple[int, int, int] = (0, 0, 0), enables: TextAttributes = TextAttributes.STANDARD):    
     img = Image.new("RGBA", (int(width), int(height)), (0, 0, 0, 0))
     drawer = ImageDraw.Draw(img, "RGBA")
 
@@ -41,12 +63,11 @@ def render_text(text: str, width: int, height: int, x_off: int, y_off: int, styl
         font = style.value
 
     text_ = ImageText.Text(text.replace("_", " "), font, "RGBA")
-    if enable_wrapping:
-        try:
+    match enables:
+        case TextAttributes.WRAPPING:
             text_.wrap(width)
-
-        except:
-            pass
+        case TextAttributes.TRUNCATED:
+            text_.text = truncate_text_to_width(text, width, style, size)
 
     drawer.text((x_off, y_off), text_, font=font, anchor=anchor_point, fill=tuple(color))
 

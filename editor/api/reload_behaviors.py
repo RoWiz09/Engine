@@ -1,4 +1,4 @@
-from . import global_vars as modules
+from core import global_vars as modules
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ghost_engine.scripting.behavior import Behavior

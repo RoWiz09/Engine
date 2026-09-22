@@ -253,7 +253,7 @@ class LabeledCheckbox(UiElement):
     def __init__(self, parent, width, height, label: str, state: bool = False, **kwrds):
         super().__init__(parent, width, height)
 
-        self.label = TextElement(None, label.replace("_", " ").title(), width, height).set_anchor("lm", TextRenderAnchor.middle_left)
+        self.label = TextElement(None, label.replace("_", " ").title(), width / 3, height, TextAttributes.TRUNCATED).set_anchor("lm", TextRenderAnchor.middle_left)
         self.label.old = True
         self.checkbox = Checkbox(None, state)
 
@@ -266,14 +266,14 @@ class LabeledCheckbox(UiElement):
 
     def resize(self, size, rebuild_sprite = True):
         super().resize(size, rebuild_sprite)
-        self.label.resize(size)
+        self.label.resize(glm.vec2(size.x / 3, size.y))
 
     def draw(self, editor, pos):
         if self.rect.pos != pos:
             self.rect.move_to(glm.vec2(*pos))
             
         self.label.draw(editor, pos)
-        self.checkbox.draw(editor, glm.vec2(self.label.rect.right - self.checkbox.size.x, self.label.rect.top))    
+        self.checkbox.draw(editor, glm.vec2(self.rect.right - self.checkbox.size.x, self.rect.top))    
         
     def handle_input(self, keycodes, mouse_buttons, input_handler):
         if self.checkbox.rect.collide_point(glm.vec2(input_handler.mouse_pos)):
@@ -292,9 +292,9 @@ class LabeledInput(UiElement):
         self.focused_elem: InputField = None
         self.ui_elements = []
 
-        self.label = TextElement(None, label.replace("_", " ").title()[:20], get_size(label.replace("_", " ").title()[:20], TextStyle.NORMAL).x, height).set_anchor("lm", TextRenderAnchor.middle_left)
+        self.label = TextElement(None, label.replace("_", " ").title(), width / 3, height, TextAttributes.TRUNCATED).set_anchor("lm", TextRenderAnchor.middle_left)
         self.label.old = True
-        self.input_field = InputField(self, width - self.label.size.x - 10, height, hint=label, starting_message=starting, type_=type_)
+        self.input_field = InputField(self, width / 3 * 2, height, hint=label, starting_message=starting, type_=type_)
         if type_ == float:
             self.input_field.default_val = 0.0
         if type_ == int:
@@ -318,7 +318,9 @@ class LabeledInput(UiElement):
 
     def resize(self, size, rebuild_sprite = True):
         super().resize(size, rebuild_sprite)
-        self.input_field.resize(size - glm.vec2(self.label.size.x + 10, 0))
+
+        self.label.resize(glm.vec2(size.x / 3, size.y))
+        self.input_field.resize(glm.vec2(size.x / 3 * 2 - 10, size.y))
 
     def draw(self, editor, pos):
         if self.rect.pos != pos:
@@ -372,7 +374,6 @@ class DropdownButton(UiElement):
     def resize(self, size, rebuild_sprite = True):
         super().resize(size, rebuild_sprite)
         size.y = self.__base_height
-        super().resize(size, rebuild_sprite)
 
         self.label.resize(size - glm.vec2(self.__base_height, 0), rebuild_sprite)
         self.dropdown.resize(glm.vec2(size.y), rebuild_sprite)
@@ -446,3 +447,10 @@ class DropdownButton(UiElement):
         if self.focused_elem:
             self.focused_elem.handle_input(keycodes, mouse_buttons, input_handler)
 
+class LabeledVector3Input(UiElement):
+    def __init__(self, parent, width, height, label: str, variable_ref: glm.vec3, **kwrds):
+        super().__init__(parent, width, height, **kwrds)
+        self.label = TextElement(self, label.replace("_", " ").title(), width / 3, height, TextAttributes.TRUNCATED)
+
+    def draw(self, editor, pos):
+        self.label.draw(editor, pos)

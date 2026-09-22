@@ -10,7 +10,7 @@ else:
 
 from concurrent.futures import ProcessPoolExecutor, Future
 
-from . import global_vars
+from core import global_vars
 
 from queue import Empty
 

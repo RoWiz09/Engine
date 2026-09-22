@@ -1,8 +1,8 @@
 from __future__ import annotations
 from typing import Optional, Literal, Any, TypeAlias
 
-from .editor_windows import *
-from . import global_vars as modules
+from core.editor_windows import *
+from core import global_vars as modules
 
 from pyglm import glm
 from typing import TYPE_CHECKING
@@ -10,8 +10,6 @@ if TYPE_CHECKING:
     from ..editor import Window
 
 from .font import get_size
-
-import OpenGL.GL as gl
 
 Split: TypeAlias = Literal["horizontal", "vertical"]
 SplitDirection: TypeAlias = Literal["left", "right", "top", "bottom"]
@@ -29,7 +27,7 @@ class DockNodeEdges:
         return [self.left_owner, self.top_owner, self.right_owner, self.bottom_owner]
 
 class DockNode:
-    CURSOR_AT_FRAME_START = global_vars.current_cursor_type
+    CURSOR_AT_FRAME_START = modules.current_cursor_type
     MIN_SPLIT = 0.05
 
     def __init__(self, docker: Docker):
@@ -108,7 +106,7 @@ class DockNode:
         self.child_a.parent = self
         self.child_b.parent = self
 
-        self.docker.compute_node(self, global_vars.editor_window)
+        self.docker.compute_node(self, modules.editor_window)
 
     def split_node(self, node_a: DockNode, node_b: DockNode, split: Split):
         self.child_a = node_a
@@ -183,7 +181,7 @@ class DockNode:
         
         return False
 
-    def handle_resize(self, input_handler: global_vars.Input, mouse_buttons: global_vars.MouseButtons):
+    def handle_resize(self, input_handler: modules.Input, mouse_buttons: modules.MouseButtons):
         if self.is_root:
             return
 
@@ -222,15 +220,15 @@ class DockNode:
                 ew_draggable = idx == 0 or idx == 2
                 ns_draggable = idx == 1 or idx == 3
 
-        cursor = global_vars.current_cursor_type
+        cursor = modules.current_cursor_type
         if ew_draggable and ns_draggable and cursor != glfw.RESIZE_ALL_CURSOR:
-            global_vars.current_cursor_type = glfw.RESIZE_ALL_CURSOR
+            modules.current_cursor_type = glfw.RESIZE_ALL_CURSOR
 
         elif ew_draggable and cursor != glfw.RESIZE_EW_CURSOR:
-            global_vars.current_cursor_type = glfw.RESIZE_EW_CURSOR
+            modules.current_cursor_type = glfw.RESIZE_EW_CURSOR
 
         elif ns_draggable and cursor != glfw.RESIZE_NS_CURSOR:
-            global_vars.current_cursor_type = glfw.RESIZE_NS_CURSOR
+            modules.current_cursor_type = glfw.RESIZE_NS_CURSOR
 
         if (ew_draggable or ns_draggable) and input_handler.get_mouse_button_down(mouse_buttons.LEFT):
             self.resizing = True
@@ -246,9 +244,9 @@ class DockNode:
         for window in self.windows:
             window.resize(*window.draw_data.size, True, True)
 
-    def update_size(self, input_handler: global_vars.Input, mouse_buttons: global_vars.MouseButtons):
+    def update_size(self, input_handler: modules.Input, mouse_buttons: modules.MouseButtons):
         if not input_handler.get_mouse_button(mouse_buttons.LEFT):
-            Docker.INST.compute_node(self.parent, global_vars.editor_window)
+            Docker.INST.compute_node(self.parent, modules.editor_window)
             self.resizing = False
             return True
 
@@ -266,7 +264,7 @@ class DockNode:
 
         if not within(self.parent.split_ratio - 0.05, split_ratio, self.parent.split_ratio + 0.05):
             self.parent.split_ratio = split_ratio
-            Docker.INST.compute_node(self.parent, global_vars.editor_window, (False, False))
+            Docker.INST.compute_node(self.parent, modules.editor_window, (False, False))
 
         return False
 
@@ -569,7 +567,7 @@ class Docker:
 
         return focused
 
-    def validate_resize(self, input_handler: global_vars.Input, mouse_buttons: global_vars.MouseButtons):
+    def validate_resize(self, input_handler: modules.Input, mouse_buttons: modules.MouseButtons):
         if self.current_resize:
             if self.current_resize.update_size(input_handler, mouse_buttons):
                 self.current_resize = None
@@ -619,9 +617,9 @@ class Docker:
                 dock_window("right")
                 break
 
-            self.compute_node(node, global_vars.editor_window)
+            self.compute_node(node, modules.editor_window)
 
-    def validate_drag(self, input_handler: global_vars.Input, mouse_buttons: global_vars.MouseButtons):
+    def validate_drag(self, input_handler: modules.Input, mouse_buttons: modules.MouseButtons):
         if self.current_resize:
             return  # Can't drag and resize at the same time!
         
@@ -635,7 +633,7 @@ class Docker:
                     continue
                 
                 if tab.rect.collide_point(mouse_pos):
-                    global_vars.current_cursor_type = glfw.POINTING_HAND_CURSOR
+                    modules.current_cursor_type = glfw.POINTING_HAND_CURSOR
                     if input_handler.get_mouse_button_down(mouse_buttons.LEFT):
                         self.holding_window = (window, tab, node)
                         break

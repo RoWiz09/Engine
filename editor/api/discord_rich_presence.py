@@ -7,7 +7,7 @@ import time
 
 import enum
 
-from . import global_vars
+from core import global_vars
 
 PRESENCE_SHOW_SCENE = 1000
 

@@ -23,7 +23,10 @@ if TYPE_CHECKING:
 
     logger_module: LoggerModule = None
     logger: type[Logger] = None
+
     scene_manager: type[SceneManager] = None
+    scene_manager_type: TypeAlias = SceneManager
+
     input_handler: type[Input] = None
     key_codes: type[KeyCodes] = None
     mouse_buttons: type[MouseButtons] = None
@@ -42,7 +45,10 @@ if TYPE_CHECKING:
 else:
     logger_module: type = None
     logger: type = None
+
     scene_manager: type = None
+    scene_manager_type: TypeAlias = Any
+
     input_handler: type = None
     key_codes: type = None
     mouse_buttons: type = None

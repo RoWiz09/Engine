@@ -9,18 +9,18 @@ import importlib
 import json
 
 if __name__ == "__main__":
-    from systems.editor_camera import editor_camera
+    from api.editor_camera import editor_camera
 
-    from systems.window_drawer import WindowDrawer, EditorUiWindow
-    from systems.window_docker import *
-    from systems.editor_windows import *
+    from api.window_drawer import WindowDrawer, EditorUiWindow
+    from api.window_docker import *
+    from core.editor_windows import *
 
-    from systems.discord_rich_presence import DiscordRichPresence
+    from api.discord_rich_presence import DiscordRichPresence
 
-    from systems.task_scheduler import TaskScheduler
+    from api.task_scheduler import TaskScheduler
 
-    from systems.build import build_game
-    from systems import global_vars
+    from api.build import build_game
+    from core import global_vars
 
 glfw_initalized = False
 
@@ -98,30 +98,36 @@ class Window:
         # RoWiz (5/4/26):
         # Before creating the scene manager, we have to modify the pack class functions.
         # Update - As of 5/7/26, I also add methods to the scene manager for asynchronous scene loading.
+        # Update 2 - As of 9/17/26, I also overrided the window property in behaviors to point to this class' instance.
         self.setup_pack()
         self.setup_async_loading()
+        global_vars.behavior.window = property(lambda self: Window._instance)
 
         self.scene_framebuffer = gl.glGenFramebuffers(1)
-        self.scene_manager = SceneManager()
+        self.scene_manager: global_vars.scene_manager_type = SceneManager()
         Window._created = True
 
         self.drawer = WindowDrawer()
 
-        self.docker = Docker()
+        self.docker: Docker = Docker()
         scene_viewer = SceneView()
         hierarchy = Hierarchy()
         inspector = Inspector()
         console = ConsoleWindow()
         files = FileViewer()
+        play = Game()
 
         self.drawer.add_window_data(scene_viewer)
         self.drawer.add_window_data(hierarchy)
         self.drawer.add_window_data(inspector)
         self.drawer.add_window_data(console)
         self.drawer.add_window_data(files)
+        self.drawer.add_window_data(play)
 
         root = self.docker.dock(self.docker.root, scene_viewer, "right")
+        self.docker.dock(root.child_b, play)
         self.docker.dock(root.child_a, hierarchy)
+
         self.docker.set_ratio(root.child_a, 0.15, self)
         self.docker.set_ratio(root, 0.15, self)
 
@@ -234,7 +240,7 @@ class Window:
         setattr(global_vars.scene_manager, "load_scene_index_async", load_scene_index_async)
         setattr(global_vars.scene_manager, "load_scene_async", load_scene_async)
 
-    def render_scene(self, frame_buffer = None):
+    def render_scene(self, frame_buffer = None, update_scene = False):
         frame_buffer = frame_buffer if frame_buffer else self.scene_framebuffer
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, frame_buffer)
         gl.glEnable(gl.GL_DEPTH_TEST)
@@ -242,11 +248,14 @@ class Window:
         gl.glClearColor(0.25, 0.25, 1, 1)
         gl.glClear(gl.GL_DEPTH_BUFFER_BIT | gl.GL_COLOR_BUFFER_BIT)
 
-        self.scene_manager.render_scene(
-            self.editor_cam.get_view_mat(), 
-            self.editor_cam.get_projection_mat(), 
-            self.editor_cam.get_view_pos()
-        )
+        if not update_scene:
+            self.scene_manager.render_scene(
+                self.editor_cam.get_view_mat(), 
+                self.editor_cam.get_projection_mat(), 
+                self.editor_cam.get_view_pos()
+            )
+        else:
+            self.scene_manager.update_scene()
 
         if frame_buffer != 0:
             gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)

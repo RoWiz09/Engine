@@ -1,4 +1,4 @@
-from . import global_vars
+from core import global_vars
 import sys
 
 def static_class(cls):

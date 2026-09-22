@@ -315,6 +315,9 @@ class Behavior:
     def destroy(self):
         Behavior.behavior_instances[type(self)].remove(self.__gameobject)
 
+    def __str__(self):
+        return f"{self.__class__.__name__} at {self.gameobject.name}"
+
 class EditorField:
     def __init__(self, field_type: type, default=None):
         self.type = field_type

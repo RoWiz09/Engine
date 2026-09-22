@@ -305,4 +305,5 @@ class Pack:
         
         print(package.__dict__)
         module = getattr(package, behavior_class)
+        return getattr(module, behavior_class)
         

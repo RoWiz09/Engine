@@ -8,7 +8,7 @@ import glfw
 from pyglm import glm
 
 from .shader_program import ShaderProgram
-from . import global_vars as modules
+from core import global_vars as modules
 from enum import Enum, Flag, auto
 
 from .font import render_window_label, render_text, TextStyle, AnchorPoints, get_size

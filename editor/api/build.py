@@ -1,5 +1,3 @@
-from . import global_vars
-
 from typing import TYPE_CHECKING, TypeAlias, Any
 if TYPE_CHECKING:
     from ghost_engine.core.logger import Logger
@@ -9,8 +7,6 @@ else:
     Logger: TypeAlias = Any
 
 from pathlib import Path
-
-from . import global_vars as modules
 from .task_scheduler import TaskScheduler
 
 import cryptography

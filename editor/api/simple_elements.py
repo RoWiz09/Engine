@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Any
 
 from .window_drawer import UiElement, EditorUiWindow, DragData
-from .font import TextStyle, AnchorPoints, render_text, get_size
-from . import global_vars as modules
+from .font import TextStyle, TextAttributes, AnchorPoints, render_text, get_size
+from core import global_vars as modules
 
 from PIL import Image, ImageDraw
 
@@ -26,7 +26,7 @@ class TextRenderAnchor(Enum):
     bottom_right = glm.vec2(1, 1)
 
 class TextElement(UiElement):
-    def __init__(self, parent, text: str, width: float, height: float, **kwargs):
+    def __init__(self, parent, text: str, width: float, height: float, attribute: TextAttributes = TextAttributes.STANDARD, **kwargs):
         # The amount the text is offset from the edge of it's bounding box.
         # Left, Top, Right, Bottom
         self.edge_offset = [0, 0, 0, 0]
@@ -36,7 +36,7 @@ class TextElement(UiElement):
         self.anchor: AnchorPoints = "mm"
         self.text_draw_anchor: TextRenderAnchor = TextRenderAnchor.middle_middle
 
-        self.use_wrapping = True
+        self.attributes: TextAttributes = attribute
         self.color = (255, 255, 255)
 
         self.text_size = None
@@ -76,7 +76,7 @@ class TextElement(UiElement):
             offset.y + self.edge_offset[1]
 
         return render_text(self.message, int(self.size.x), int(self.size.y), 
-                              int(offset.x), int(offset.y), self.style, self.anchor, self.text_size, color=self.color, enable_wrapping=self.use_wrapping)
+                              int(offset.x), int(offset.y), self.style, self.anchor, self.text_size, color=self.color, enables=self.attributes)
 
     def draw(self, editor, pos):
         if self.old:
@@ -89,11 +89,12 @@ class TextElement(UiElement):
     
 class Button(UiElement):
     can_claim_focus = True
-    def __init__(self, parent, width: float, height: float, text: str, click_callback: function, **kwargs):
+    def __init__(self, parent, width: float, height: float, text: str, click_callback: function = None, **kwargs):
         super().__init__(parent, width, height, **kwargs)
 
         self.label = TextElement(None, text, width, height)
-        self.click_callback = click_callback
+        if click_callback:
+            self.on_left_click += click_callback
         self.clicked = False
 
         self.was_focused_last = self.focused
@@ -137,13 +138,10 @@ class Button(UiElement):
 
         super().draw(editor, pos)
         self.label.draw(editor, pos + self.pos_offset)
-    
+        
     def handle_input(self, keycodes, mouse_buttons, input_handler):
         super().handle_input(keycodes, mouse_buttons, input_handler)
         modules.current_cursor_type = glfw.POINTING_HAND_CURSOR
-        if input_handler.get_mouse_button_up(mouse_buttons.LEFT):
-            if self.click_callback:
-                self.click_callback()
 
     def resize(self, size, rebuild_sprite = True):
         super().resize(size, rebuild_sprite)
@@ -165,7 +163,7 @@ class TextButton(UiElement):
         self.anchor: AnchorPoints = "lm"
         self.text_draw_anchor: TextRenderAnchor = TextRenderAnchor.middle_left
 
-        self.use_wrapping = True
+        self.attributes = TextAttributes.STANDARD
 
         self.text_size = None
         super().__init__(parent, width, height, **kwrds)
@@ -202,7 +200,7 @@ class TextButton(UiElement):
             color = self.focused_color
 
         return render_text(self.text, int(self.size.x), int(self.size.y), 
-                                int(offset.x), int(offset.y), self.style, self.anchor, self.text_size, color=color, enable_wrapping=self.use_wrapping)
+                                int(offset.x), int(offset.y), self.style, self.anchor, self.text_size, color=color, enables=self.attributes)
 
     def draw(self, editor, pos):
         if self.old or self.was_focused != self.focused:

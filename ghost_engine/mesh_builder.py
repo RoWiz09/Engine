@@ -7,6 +7,7 @@ from pyglm import glm
 import OpenGL.GL as GL
 import numpy as np
 import hashlib
+import copy
 
 class MeshBuilder:
     class Mesh:
@@ -76,6 +77,9 @@ class MeshBuilder:
             GL.glDeleteBuffers(1, [self.ebo])
 
             del MeshBuilder.Mesh.MESH_REGISTRY[self._mesh_id]
+
+        def __reduce__(self):
+            return (MeshBuilder.Mesh, (self.vertices, self.indices))
 
     @dataclass
     class VertexProvider:
@@ -162,4 +166,6 @@ class MeshBuilder:
         self.vertices.clear()
         self.indices.clear()
         return mesh
-    
+
+    def __reduce__(self):
+        return (MeshBuilder, (self.vertices, self.indices))

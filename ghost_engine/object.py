@@ -44,9 +44,26 @@ class GameObject:
         for comp in behaviors:
             if issubclass(type(comp), Behavior):
                 self.behaviors.append(comp)
+
+                if issubclass(type(comp), RenderBehavior):
+                    self.__render_behaviors.append(comp)
             
             else:
                 Logger("CORE").log_error(f"Object of type {type(comp).__name__} is not a Behavior.")
+
+    def copy(self):
+        new_inst = GameObject(
+            self.name, 
+            self.mat, 
+            Transform(*self.transform.copy_state()), 
+            *[type(behavior).from_inst(behavior) for behavior in self.behaviors]
+        )
+        new_inst.__enabled = self.__enabled
+        for child in self.children:
+            child_inst = child.copy()
+            child_inst.transform.parent = self
+
+        return new_inst
 
     # Rendering
     def pre_render(self):
