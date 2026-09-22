@@ -14,7 +14,7 @@ class Camera(Behavior, CamType):
     def __init__(self, gameobject):
         super().__init__(gameobject)
     
-    def on_scene_load(self, scene_info):
+    def load(self):
         if not isinstance(self.rotation_mod, glm.quat):
             self.rotation_mod_ = glm.quat(glm.radians(glm.vec3(self.rotation_mod)))
 
@@ -24,8 +24,8 @@ class Camera(Behavior, CamType):
     def get_view_mat(self):
         return glm.lookAt(
             self.position_mod + self.gameobject.transform.pos, 
-            self.position_mod + self.gameobject.transform.pos + glm.vec3(0, 0, 1) * (self.rotation_mod_ * self.gameobject.transform.rot), 
-            glm.vec3(0, 1, 0) * (self.rotation_mod_ * self.gameobject.transform.rot)
+            self.position_mod + self.gameobject.transform.pos + self.gameobject.transform.front, 
+            self.gameobject.transform.up
         )
         
     def get_projection_mat(self):

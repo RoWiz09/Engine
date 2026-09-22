@@ -192,7 +192,7 @@ class ShaderProgram:
         glBindBuffer(GL_UNIFORM_BUFFER, 0)
 
     @_use_shader
-    def set_spot_lights(self):
+    def set_spotlights(self):
         lights = LightType.lights[LightTypes.SPOT]
 
         glUniform1i(
@@ -203,11 +203,13 @@ class ShaderProgram:
         glBindBuffer(GL_UNIFORM_BUFFER, self.spot_light_ubo)
 
         for i, light in enumerate(lights):
-            direction = light.gameobject.transform.forward
+            from ..scripting.behavior import Behavior
+            light: Behavior
+            direction = light.gameobject.transform.front
 
             data = SpotLightUBO(
                 (*light.gameobject.transform.pos, light.intensity),
-                (*direction, 0.0),
+                (direction.x, direction.y, direction.z, 0.0),
                 (*light.color, 0.0),
 
                 (light.outer_cutoff_radians,

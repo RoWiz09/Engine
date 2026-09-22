@@ -9,6 +9,8 @@ else:
 
 import numpy as np
 
+WORLD_UP = glm.vec3(0, 1, 0)
+
 class Transform:
     def __init__(self, pos: glm.vec3 = glm.vec3(0.0),
                        rot: glm.vec3 = glm.vec3(0),
@@ -51,7 +53,7 @@ class Transform:
     @property
     def rot(self):
         if self.__parent:
-            return self.quaternion_rot * self.parent.rot
+            return self.parent.rot * self.quaternion_rot
         
         return self.quaternion_rot
     
@@ -103,19 +105,19 @@ class Transform:
 
     @property
     def front(self):
-        rot: glm.vec3 = glm.radians(self.worldrot)
-        rot -= glm.radians(glm.vec3(0, 270, 0))
-
-        front = glm.vec3()
-        front.x = np.cos(rot.y) * np.cos(rot.x)
-        front.y = np.sin(rot.x)
-        front.z = np.sin(rot.y) * np.cos(rot.x)
-
-        return glm.normalize(front)
+        return self.rot * glm.vec3(0, 0, 1)
     
     @property
     def forward(self):
         return self.front
+
+    @property
+    def right(self):
+        return glm.cross(self.front, self.up)
+
+    @property
+    def up(self):
+        return self.rot * WORLD_UP
 
     def move(self, dx: float = 0, dy: float = 0, dz: float = 0):
         delta = glm.vec3(dx, dy, dz)

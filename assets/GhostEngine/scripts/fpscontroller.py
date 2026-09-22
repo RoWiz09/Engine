@@ -31,35 +31,32 @@ class FPSController(Behavior):
         if not self.camera:
             Logger("FPS CONTROLLER").log_error("The FPS controller's gameobject is missing a child with a camera!")
 
+        width, height = self.window.size()[0]//2, self.window.size()[1]//2
+        Input().mouse_pos = (width, height)
+
     def update(self, dt):
-        move_z = 0
+        velocity = glm.vec3()
         if Input().get_key(KeyCodes.k_W):
-            move_z += 1
+            velocity += self.gameobject.transform.front
         if Input().get_key(KeyCodes.k_S):
-            move_z -= 1
-
-        move_x = 0
-        if Input().get_key(KeyCodes.k_A):
-            move_x += 1
-
+            velocity -= self.gameobject.transform.front
         if Input().get_key(KeyCodes.k_D):
-            move_x -= 1
-
-        width, height = self.window.size()[0]/2, self.window.size()[1]/2
+            velocity += self.gameobject.transform.right
+        if Input().get_key(KeyCodes.k_A):
+            velocity -= self.gameobject.transform.right
+                
+        width, height = self.window.size()[0]//2, self.window.size()[1]//2
         mx, my = Input().mouse_pos
-
         mx, my = mx-width, my-height
 
         Input().mouse_pos = (width, height)
 
-        vel = glm.vec3(move_x, 0, move_z)
-        if glm.length(vel) > 0.001:
-            vel = glm.normalize(vel) * self.speed * dt
+        if glm.length(velocity) > 0.001:
+            vel = glm.normalize(velocity) * self.speed * dt
+            self.gameobject.transform.move(*vel)
 
-            self.gameobject.transform.move_with_rotation(*vel)
-
-        self.gameobject.transform.rotate_by_degrees(0, mx * self.mouse_sens, 0)
-        self.camera.transform.rotate_by_degrees(-my * self.mouse_sens, 0, 0)
+        self.gameobject.transform.rotate_by_degrees(0, -mx * self.mouse_sensitivity, 0)
+        self.camera.transform.rotate_by_degrees(my * self.mouse_sensitivity, 0, 0)
         self.camera.transform.localrot.x = clamp(-89.0, 89.0, self.camera.transform.localrot.x)
 
         if Input().get_key(KeyCodes.k_space) and self.rigidbody.grounded:

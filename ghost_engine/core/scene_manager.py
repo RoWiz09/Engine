@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from ..rendering.shader_program import ShaderProgram
 from ..rendering.material import Material
 from .transform import Transform
@@ -17,6 +19,8 @@ from pyglm import glm
 from PIL import Image as image
 
 from .logger import Logger
+
+from weakref import ref, ReferenceType
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -167,6 +171,11 @@ class SceneManager:
         return cls._instance
 
     def __init__(self):
+        """
+        Gets the current SceneManager instance.
+        Returns:
+            SceneManager: The SceneManager instance.
+        """
         if SceneManager._created:
             return
 
@@ -188,9 +197,10 @@ class SceneManager:
         self.last_time = glfw.get_time()
         self.accumulator = 0.0
 
-        self.active_camera: CamType = None
+        self.active_camera: ReferenceType[CamType] = None
 
         self.disable_lighting = False
+        self.just_loaded = False
 
     def load_files(self):
         scenes = {}
@@ -276,6 +286,7 @@ class SceneManager:
                 
 
     def _instantiate_scene_objects(self, scene_data: dict) -> list[GameObject]:
+        self.just_loaded = True
         for lights in LightType.lights.values():
             lights.clear()
             
@@ -295,8 +306,8 @@ class SceneManager:
                         setattr(behavior, var_name, value)
                     behavior.enabled = comp_data.get("active", True)
 
-                    if not self.active_camera and issubclass(type(behavior), CamType):
-                        self.active_camera = behavior
+                    if (not self.active_camera or not self.active_camera()) and issubclass(type(behavior), CamType):
+                        self.active_camera = ref(behavior)
 
                     obj_scripts.add(behavior)
                     behavior.load()
@@ -360,13 +371,13 @@ class SceneManager:
                     script.on_scene_load(scene_info)
 
     @deprecated(replacement=GameObject.find_with_behavior)
-    def get_objects_with_component(self, component_class) -> list[GameObject]:
+    def get_objects_with_component(self, behavior_class) -> list[GameObject]:
         objects = []
         for object in self.game_objects:
             if not object.enabled:
                 continue
             
-            if object.get_component(component_class):
+            if object.get_behavior(behavior_class):
                 objects.append(object)
         
         return objects
@@ -391,7 +402,7 @@ class SceneManager:
     def render_scene(self, view: glm.mat4x4, proj: glm.mat4x4, view_pos: glm.vec3):
         for shader in self.shaders.values():
             shader.set_point_lights()
-            shader.set_spot_lights()
+            shader.set_spotlights()
 
             shader.set_vec3("uViewPos", view_pos)
             shader.set_bool("uDisableLighting", self.disable_lighting)
@@ -411,19 +422,22 @@ class SceneManager:
 
     def update_scene(self):
         time = glfw.get_time()
-        dt = time - self.last_time
+        if not self.just_loaded:
+            dt = time - self.last_time
+            self.accumulator += dt
+        else:
+            dt = 0.0
+            self.just_loaded = False
         self.last_time = time
-        self.accumulator += dt
         
         for _, components in Behavior.component_category_registry.items():
             for component in components:
                 component.on_frame_start()
 
-        if self.active_camera:
-            view = self.active_camera.get_view_mat()
-            proj = self.active_camera.get_projection_mat()
-
-            view_pos = self.active_camera.get_view_pos()
+        if self.active_camera and self.active_camera():
+            view = self.active_camera().get_view_mat()
+            proj = self.active_camera().get_projection_mat()
+            view_pos = self.active_camera().get_view_pos()
 
         else:
             view = glm.lookAt(glm.vec3(0, 0, 0), glm.vec3(0, 0, 5), glm.vec3(0, 1, 0))
