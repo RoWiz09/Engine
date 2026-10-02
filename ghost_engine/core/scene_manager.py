@@ -6,6 +6,7 @@ from .transform import Transform
 from .packer import Pack
 from ..object import GameObject 
 from .input import Input, KeyCodes
+from ..action import Action
 
 from ..scripting.behavior import *
 
@@ -22,7 +23,7 @@ from .logger import Logger
 
 from weakref import ref, ReferenceType
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import os, json, importlib, glfw, sys
@@ -33,6 +34,11 @@ import inspect
 class SceneInfo:
     scene_name: str
     scene_index: int
+
+@dataclass
+class Scene:
+    info: SceneInfo
+    game_objects: list[GameObject] = field(default_factory=list)
 
 class SceneManager:
     BASE_SHADER_VERT = """
@@ -192,7 +198,7 @@ class SceneManager:
         self.scenes, self.shaders = self.load_files()
         self.scenes = dict(sorted(self.scenes.items(), key=get_index))
 
-        self.game_objects: list[GameObject] = []
+        self.scene = None
 
         self.last_time = glfw.get_time()
         self.accumulator = 0.0
@@ -201,6 +207,9 @@ class SceneManager:
 
         self.disable_lighting = False
         self.just_loaded = False
+
+        self.on_scene_load = Action()
+        self.on_scene_unload = Action()
 
     def load_files(self):
         scenes = {}
@@ -286,10 +295,7 @@ class SceneManager:
                 
 
     def _instantiate_scene_objects(self, scene_data: dict) -> list[GameObject]:
-        self.just_loaded = True
-        for lights in LightType.lights.values():
-            lights.clear()
-            
+        self.just_loaded = True            
         scene_objects = []
             
         game_objects: list[dict] = scene_data["objects"]
@@ -348,32 +354,49 @@ class SceneManager:
 
         # Call unload callbacks on current scene before switching
         scene_info = SceneInfo(scene_name, scene_index)
-        for obj in self.game_objects.copy():
-            if alert_scripts:
-                for script in obj.behaviors:
-                    script.on_scene_unload(scene_info)
-        
-            if not obj.static:
-                obj.destroy()
-                self.game_objects.remove(obj)
+        if self.scene:
+            for obj in self.scene.game_objects.copy():
+                if alert_scripts:
+                    for script in obj.behaviors:
+                        script.on_scene_unload(self.scene.info)
+            
+                if not obj.static:
+                    obj.destroy()
+                    self.scene.game_objects.remove(obj)
 
-
+            self.on_scene_unload(self.scene)
+            
         # Load new scene objects
         scene_data = self.pack.read_json(scene_path)
 
-        self.game_objects = self._instantiate_scene_objects(scene_data)
+        scene_objects = self._instantiate_scene_objects(scene_data)
         Logger("SCENE MANAGEMENT").log_debug(f"Loaded gameobjects for scene {scene_info.scene_name}|{scene_info.scene_index}")
 
         # Call load callbacks
+        self.scene = Scene(scene_info, scene_objects)
         if alert_scripts:
-            for obj in self.game_objects:
+            for obj in scene_objects:
                 for script in obj.behaviors:
                     script.on_scene_load(scene_info)
+
+        self.on_scene_load(self.scene)
+
+    def unload_scene(self):
+        if self.scene:
+            for obj in self.scene.game_objects.copy():
+                for script in obj.behaviors:
+                    script.on_scene_unload(self.scene.info)
+            
+                if not obj.static:
+                    obj.destroy()
+                    self.scene.game_objects.remove(obj)
+
+            self.on_scene_unload(self.scene)
 
     @deprecated(replacement=GameObject.find_with_behavior)
     def get_objects_with_component(self, behavior_class) -> list[GameObject]:
         objects = []
-        for object in self.game_objects:
+        for object in self.scene.game_objects:
             if not object.enabled:
                 continue
             
@@ -386,7 +409,7 @@ class SceneManager:
         tree = {}
 
         # find roots first
-        roots = [obj for obj in self.game_objects if obj.transform.parent is None]
+        roots = [obj for obj in self.scene.game_objects if obj.transform.parent is None]
 
         def build(node: GameObject):
             children = {}
@@ -411,13 +434,13 @@ class SceneManager:
             shader.set_mat4("uProjection", proj)
 
         # Rendering
-        for obj in self.game_objects:
+        for obj in self.scene.game_objects:
             obj.pre_render()
 
-        for obj in self.game_objects:
+        for obj in self.scene.game_objects:
             obj.render()
 
-        for obj in self.game_objects:
+        for obj in self.scene.game_objects:
             obj.post_render()
 
     def update_scene(self):
@@ -447,11 +470,11 @@ class SceneManager:
             view_pos = glm.vec3(0, 0, 0)
         self.render_scene(view, proj, view_pos)
 
-        for obj in self.game_objects:
+        for obj in self.scene.game_objects:
             obj.update(dt)
 
         while self.accumulator >= 1/50:
-            for obj in self.game_objects:
+            for obj in self.scene.game_objects:
                 obj.fixed_update()
             self.accumulator -= 1/50
 

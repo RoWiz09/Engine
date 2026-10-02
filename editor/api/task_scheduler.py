@@ -11,7 +11,6 @@ else:
 from concurrent.futures import ProcessPoolExecutor, Future
 
 from core import global_vars
-
 from queue import Empty
 
 import os, multiprocessing

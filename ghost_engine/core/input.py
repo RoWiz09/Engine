@@ -224,6 +224,9 @@ class Input:
         """
         glfw.set_input_mode(glfw.get_current_context(), glfw.CURSOR, cursor_state.value)
     
+    def get_cursor_visibility(self):
+        return glfw.get_input_mode(glfw.get_current_context(), glfw.CURSOR)
+
     @property
     def mouse_pos(self):
         return self.__mouse_pos

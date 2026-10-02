@@ -6,7 +6,7 @@ from pyglm import glm
 from enum import Enum
 
 class Rigidbody(Behavior, PhysicsBehavior):
-    velocity = glm.vec3(0)
+    __slots__ = ['velocity', 'grounded', 'time_when_last_grounded']
 
     gravity = EditorField(float, -9.8)
     friction = EditorField(float, 5)
@@ -15,6 +15,7 @@ class Rigidbody(Behavior, PhysicsBehavior):
     def __init__(self, gameobject):
         super().__init__(gameobject)
 
+        self.velocity = glm.vec3(0)
         self.grounded = False
         self.time_when_last_grounded = 0
 

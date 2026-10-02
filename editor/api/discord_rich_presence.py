@@ -95,7 +95,7 @@ class DiscordRichPresence:
             while True:
                 state_data = [f"Working on project: {os.environ.get("project", "")}"]
                 if self.flags & PRESENCE_SHOW_SCENE:
-                    state_data.append(f'Current Scene: {global_vars.scene_manager().cur_scene}')
+                    state_data.append(f'Current Scene: {global_vars.SceneManager().cur_scene}')
 
                 presence_data = {
                     "name": "Ghost Engine Editor",

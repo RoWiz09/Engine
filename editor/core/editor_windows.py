@@ -27,7 +27,13 @@ import os, subprocess
 from pyglm import glm
 
 from api.reload_behaviors import reload_behaviors
-from copy import deepcopy
+
+def is_inside_async_loop() -> bool:
+    try:
+        asyncio.get_running_loop()
+        return True
+    except RuntimeError:
+        return False
 
 class SceneView(EditorUiWindow):
 	name = "Scene"
@@ -249,6 +255,10 @@ class Inspector(EditorUiWindow):
 class Hierarchy(EditorUiWindow):
 	name = "Hierarchy"
 
+	@classmethod
+	def setup(cls):
+		global_vars.scene_manager().on_scene_load += cls.start_rebuild
+
 	def __init__(self):
 		super().__init__()
 
@@ -273,7 +283,7 @@ class Hierarchy(EditorUiWindow):
 			self.object_type = getattr(sys.modules["ghost_engine.object"], "GameObject")
 		
 		new_obj = self.object_type("New Gameobject", self.manager.materials["base_mat"])
-		self.manager.game_objects.append(new_obj)
+		self.manager.scene.game_objects.append(new_obj)
 		
 		self.rebuild_windows()
 
@@ -282,12 +292,14 @@ class Hierarchy(EditorUiWindow):
 			ui_elem.resize(glm.vec2(self.renderable_width - ui_elem.pos_offset.x, ui_elem.size.y), rebuild_elem_sprites)
 
 	async def build(self):
+		self.old = False
 		self.object_buttons.clear()
 		self.ui_elements.clear()
 
 		self.ui_elements.append(self.create_object_button)
 
-		root_objects = list(filter(lambda object_: object_.transform.parent == None, self.manager.game_objects))
+		if not self.manager.scene: return
+		root_objects = list(filter(lambda object_: object_.transform.parent == None, self.manager.scene.game_objects))
 		def build_layer(objects: list, width):
 			for obj in objects:
 				button = Button(self, width, 30, obj.name, None)
@@ -303,17 +315,26 @@ class Hierarchy(EditorUiWindow):
 			return True
 
 		build_layer(root_objects, self.draw_data.size.x - self.draw_data.padding.x * 2)
+
+	@classmethod
+	def start_rebuild(cls, _):
+		if is_inside_async_loop():
+			cls.rebuild_windows().send(None)
+		else:
+			asyncio.run(cls.rebuild_windows())
 	
 	@classmethod
-	def rebuild_windows(cls):
+	async def rebuild_windows(cls):
+		tasks = set()
 		for inst in cls.instances:
-			asyncio.run(inst.build())
+			inst: Hierarchy
+			tasks.add(asyncio.create_task(inst.build()))
 
-	def draw(self, editor):
+		await asyncio.gather(*tasks)
+
+	def draw(self, editor):	
 		if self.old:
-			asyncio.run(self.build())
-			self.old = False
-			
+			self.start_rebuild(None)
 		super().draw(editor)
 
 class Scenes(EditorUiWindow):
@@ -530,8 +551,6 @@ class FileViewer(EditorUiWindow):
 
 	async def build(self):
 		self.ui_elements.clear()
-		if self.selected_dir.parts[-1] != "assets":
-			Button(self, 100, 100, "Back", lambda: self.route_to(Path(os.sep.join(self.selected_dir.parts[:-1]))))
 
 		for file in sorted(os.listdir(self.selected_dir), key=lambda x: (not (self.selected_dir / x).is_dir(), x.lower())):
 			filepath = self.selected_dir / file
@@ -540,7 +559,8 @@ class FileViewer(EditorUiWindow):
 				continue
 
 			if filepath.is_dir() and not filepath.name.startswith("."):
-				Button(self, 100, 100, filepath.name, lambda f = filepath: self.route_to(f))
+				button = Button(self, 100, 100, filepath.name)
+				button.on_left_click += lambda f = filepath: self.route_to(f)
 
 			elif filepath.is_file():
 				# Now we need to get the file type!
@@ -585,10 +605,10 @@ class FileViewer(EditorUiWindow):
 			fn_ = InputField(subpopup, 120, 20, "File Name", "empty_behavior.py")
 
 			button = Button(subpopup, 120, 20, "Create", None)
-			button.on_left_click = lambda bn=bn_, fn=fn_: self.create_file(fn.get_value(), self.FileTypes.SCRIPT, bn.get_value(), 0)
+			button.on_left_click += lambda bn=bn_, fn=fn_: self.create_file(fn.get_value(), self.FileTypes.SCRIPT, bn.get_value(), 0)
 
 		button = Button(subpopup, 100, 20, "New Behavior", None)
-		button.on_left_click = lambda p=subpopup, b=button: open_new_script_subpopup(p, b)
+		button.on_left_click += lambda p=subpopup, b=button: open_new_script_subpopup(p, b)
 
 	def handle_input(self, key_codes, mouse_buttons, input_handler):
 		if input_handler.get_mouse_button_down(mouse_buttons.RIGHT) and not self.sidebar_rect.collide_point(glm.vec2(input_handler.mouse_pos)):
@@ -619,7 +639,7 @@ class Game(EditorUiWindow):
 
 		self.scene_manager = global_vars.scene_manager()
 		play_button = Button(self, self.renderable_width, 20, "Play", None)
-		play_button.on_left_click += self.play_game
+		play_button.on_left_click += self.play_game_button_callback
 		self.play_button = play_button
 
 		self.view = UiElement(self, 0, 0)
@@ -636,6 +656,9 @@ class Game(EditorUiWindow):
 		gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, 0)
 		gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)  
 
+		self.update_game = True
+		self.game_cursor_visibility = None
+
 	def view_resize_callback(self, view: UiElement):
 		gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.fbo)
 		gl.glFramebufferTexture2D(gl.GL_READ_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0, gl.GL_TEXTURE_2D, self.view.texture, 0)
@@ -650,13 +673,45 @@ class Game(EditorUiWindow):
 		self.play_button.resize(glm.vec2(self.renderable_width, 20), rebuild_elem_sprites)
 		self.view.resize(glm.vec2(self.renderable_width, self.renderable_height - 30), rebuild_elem_sprites)
 
-	def play_game(self, _):
-		setattr(self.scene_manager, "__last_state__", self.scene_manager.game_objects.copy())
-		setattr(self.scene_manager, "__behavior_inst_reg__", modules.behavior.behavior_instances)
-		self.scene_manager.active_camera = None
-		self.scene_manager.load_scene(self.scene_manager.cur_scene, True)
+	def play_game_button_callback(self, _):
+		if not self.playing:
+			setattr(self.scene_manager, "__last_state__", self.scene_manager.scene)
+			setattr(self.scene_manager, "__last_camera__", self.scene_manager.active_camera())
 
-		self.playing = True
+			lights = {}
+			for key in modules.light_type.lights:
+				lights[key] = modules.light_type.lights[key].copy()
+				modules.light_type.lights[key].clear()
+			setattr(self.scene_manager, "__last_light_state__", lights)
+
+			behavior_reg = {}
+			for key in modules.behavior.behavior_instances.keys():	
+				behavior_reg[key] = modules.behavior.behavior_instances[key].copy()
+				modules.behavior.behavior_instances[key].clear()
+			setattr(self.scene_manager, "__behavior_inst_reg__", behavior_reg)
+
+			self.scene_manager.active_camera = None
+			self.scene_manager.scene = None
+
+			self.scene_manager.load_scene(self.scene_manager.cur_scene, True)
+
+			WindowDrawer().lock_focus = True
+			self.update_game = True
+
+		else:
+			self.scene_manager.unload_scene()
+			print(self.scene_manager.scene.game_objects, modules.behavior.behavior_instances)
+
+			self.scene_manager.scene = self.scene_manager.__last_state__
+			modules.light_type.lights = self.scene_manager.__last_light_state__
+			self.scene_manager.active_camera = weakref.ref(self.scene_manager.__last_camera__)
+			modules.behavior.behavior_instances = self.scene_manager.__behavior_inst_reg__
+			del self.scene_manager.__last_state__, self.scene_manager.__last_light_state__, self.scene_manager.__last_camera__, self.scene_manager.__behavior_inst_reg__
+
+			WindowDrawer().lock_focus = False
+			self.update_game = False
+
+		self.playing = not self.playing
 
 	def draw(self, editor):
 		window = glfw.get_current_context()
@@ -669,7 +724,27 @@ class Game(EditorUiWindow):
 		gl.glClear(gl.GL_DEPTH_BUFFER_BIT | gl.GL_COLOR_BUFFER_BIT)
 
 		gl.glViewport(0, 0, math.ceil(self.view.size.x), math.ceil(self.view.size.y))
-		if not self.playing:
+		if self.playing:
+			if self.update_game:
+				self.scene_manager.update_scene()
+
+			else:
+				if self.scene_manager.active_camera and self.scene_manager.active_camera():
+					view_mat = self.scene_manager.active_camera().get_view_mat()
+					proj_mat = self.scene_manager.active_camera().get_projection_mat()
+					view_pos = self.scene_manager.active_camera().get_view_pos()
+	
+				else:
+					view_mat = glm.lookAt(glm.vec3(0, 0, 0), glm.vec3(0, 0, 5), glm.vec3(0, 1, 0))
+					width, height = glfw.get_window_size(glfw.get_current_context())
+					proj_mat = glm.perspective(glm.radians(60), width/height, 0.01, 1000)
+					
+					view_pos = glm.vec3(0, 0, 0)
+
+				self.scene_manager.render_scene(view_mat, proj_mat, view_pos)
+				self.scene_manager.just_loaded = True
+
+		else:
 			if self.scene_manager.active_camera and self.scene_manager.active_camera():
 				view_mat = self.scene_manager.active_camera().get_view_mat()
 				proj_mat = self.scene_manager.active_camera().get_projection_mat()
@@ -683,13 +758,26 @@ class Game(EditorUiWindow):
 				view_pos = glm.vec3(0, 0, 0)
 				
 			self.scene_manager.render_scene(view_mat, proj_mat, view_pos)
-			
-		else:
-			self.scene_manager.update_scene()
 
 		gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
 		gl.glDisable(gl.GL_DEPTH_TEST)
 		gl.glViewport(0, 0, *size)
 		
 		return super().draw(editor)
-		
+
+	def handle_input(self, key_codes, mouse_buttons, input_handler):
+		if input_handler.get_key_down(key_codes.k_escape):
+			self.update_game = not self.update_game
+
+			if self.update_game:
+				width, height = glfw.get_window_size(glfw.get_current_context())
+				
+				input_handler.set_cursor_pos(width//2, height//2)
+				input_handler.set_cursor_visibility(self.game_cursor_visibility)
+				WindowDrawer().lock_focus = True
+			else:
+				self.game_cursor_visibility = global_vars.cursor_states(input_handler.get_cursor_visibility())
+				input_handler.set_cursor_visibility(global_vars.cursor_states.NORMAL)
+				WindowDrawer().lock_focus = False				
+			
+		return super().handle_input(key_codes, mouse_buttons, input_handler)

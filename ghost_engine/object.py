@@ -1,6 +1,8 @@
 from __future__ import annotations
 from typing_extensions import overload
 
+from .engine_type import EngineType
+
 from .core.logger import Logger
 from .rendering.material import Material
 from .core.transform import Transform
@@ -11,7 +13,7 @@ import sys
 from typing import TypeVar
 T = TypeVar("T")
 
-class GameObject:
+class GameObject(EngineType):
     @overload
     def __init__(self, name: str, material:Material): ...
 
@@ -192,6 +194,21 @@ class GameObject:
         for script in self.behaviors:
             script.destroy()
 
+    def copy(self, parent = None):
+        copy = GameObject(self.name, self.mat, Transform(*self.transform.copy_state(), parent))
+        for comp in self.behaviors:
+            behavior = Behavior.copy(comp, self)
+            copy.add_behavior(behavior)
+
+        for child in self.children:
+            child.copy(copy)
+        return 
+
+    def instaniate(self, other: GameObject):
+        from .core.scene_manager import SceneManager
+        object_ = other.copy()
+        SceneManager().scene.game_objects.append(object_)
+        return object_
 
     # Class Methods
     @classmethod

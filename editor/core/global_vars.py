@@ -8,12 +8,11 @@ from typing import TYPE_CHECKING, TypeAlias, Any
 if TYPE_CHECKING:
     from ghost_engine.core.logger import Logger
     from ghost_engine.core.scene_manager import SceneManager
-    from ghost_engine.core.input import Input
-    
-    from ghost_engine.core.input import KeyCodes, MouseButtons
+    from ghost_engine.core.input import Input, KeyCodes, MouseButtons, CursorStates
     from ghost_engine.scripting.behavior import EditorField, Behavior
     from ghost_engine.core import logger as LoggerModule
     from ghost_engine.core.packer import Pack, PathLike 
+    from ghost_engine.rendering.light_type import LightType
 
     from ghost_engine.datatypes.engine_data_type import DataType, DisplayMethods
 
@@ -30,6 +29,8 @@ if TYPE_CHECKING:
     input_handler: type[Input] = None
     key_codes: type[KeyCodes] = None
     mouse_buttons: type[MouseButtons] = None
+    cursor_states: type[CursorStates] = None
+
     editor_field: type[EditorField] = None
     pack: type[Pack] = None
 
@@ -40,6 +41,8 @@ if TYPE_CHECKING:
 
     behavior: type[Behavior] = None
     behavior_alias: TypeAlias = Behavior
+    light_type: type[LightType] = None
+
     action: type[Action] = None
 
 else:
@@ -52,6 +55,8 @@ else:
     input_handler: type = None
     key_codes: type = None
     mouse_buttons: type = None
+    cursor_states: type = None
+
     editor_field: type = None
     pack: type = None
 
@@ -62,6 +67,8 @@ else:
 
     behavior: type = None
     behavior_alias: TypeAlias = Any
+    light_type: type = None
+
     action: type = None
 
 from argparse import ArgumentParser
@@ -83,7 +90,7 @@ MAIN_PROC = False
 
 def get_modules(base_path: str):
     global logger, logger_module, scene_manager, input_handler, key_codes, mouse_buttons, editor_field, pack
-    global engine_data_type, engine_display_methods, behavior, action
+    global engine_data_type, engine_display_methods, behavior, action, cursor_states, light_type
 
     if base_path not in sys.path:
         sys.path.insert(0, base_path)
@@ -110,8 +117,10 @@ def get_modules(base_path: str):
     scene_manager = getattr(init_module, "SceneManager")
     input_handler = getattr(init_module, "Input") 
 
-    key_codes = getattr(init_module, "KeyCodes") 
+    key_codes = getattr(init_module, "KeyCodes")
     mouse_buttons = getattr(init_module, "MouseButtons")
+    cursor_states = getattr(init_module, "CursorStates")
+
     editor_field = getattr(sys.modules["ghost_engine.scripting.behavior"], "EditorField")
     pack = getattr(sys.modules["ghost_engine.core.packer"], "Pack")
 
@@ -119,6 +128,7 @@ def get_modules(base_path: str):
     engine_display_methods = getattr(sys.modules["ghost_engine.datatypes.engine_data_type"], "DisplayMethods")
 
     behavior = getattr(sys.modules["ghost_engine.scripting.behavior"], "Behavior")
+    light_type = getattr(sys.modules["ghost_engine.rendering.light_type"], "LightType")
     action = getattr(sys.modules["ghost_engine.action"], "Action")
 
     return logger, scene_manager, input_handler

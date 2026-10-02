@@ -7,8 +7,8 @@ import importlib
 import sys
 
 def reload_behaviors():
-    modules.logger("RELOAD").log_info("Reloading Behaviors!")
-    scene_manager = modules.scene_manager()
+    modules.Logger("RELOAD").log_info("Reloading Behaviors!")
+    scene_manager = modules.SceneManager()
     for obj in scene_manager.game_objects:
         for idx, component in enumerate(obj.behaviors.copy()):
             component_module = type(component).__module__
@@ -21,7 +21,7 @@ def reload_behaviors():
             module = importlib.import_module(component_module)
             new_class_data = getattr(module, component_class, None)
             if new_class_data is None:
-                modules.logger("BEHAVIOR MANAGER").log_error(
+                modules.Logger("BEHAVIOR MANAGER").log_error(
                     f"The class {component_class} in the module {component_module} doesn't exist anymore!")
                 obj.behaviors.pop(idx)
                 
@@ -31,6 +31,6 @@ def reload_behaviors():
             new_class_inst = new_class_data.from_inst(component)
             obj.behaviors[idx] = new_class_inst
 
-    modules.logger("RELOAD").destroy()
+    modules.Logger("RELOAD").destroy()
                 
             

@@ -108,6 +108,8 @@ class Window:
         Window._created = True
 
         self.drawer = WindowDrawer()
+        for window_type in EditorUiWindow.window_types:
+            window_type.setup()
 
         self.docker: Docker = Docker()
         scene_viewer = SceneView()
@@ -144,7 +146,6 @@ class Window:
 
         self.running_game = False
         self.scene_manager.load_scene_index_async(0, alert_scripts = False)
-        Hierarchy.rebuild_windows()
 
         self.setup_root_menu_bar()
 
@@ -303,7 +304,8 @@ class Window:
             self.drawer.handle_input(KeyCodes, MouseButtons, self.input_handler)
 
     def size(self):
-        return glfw.get_window_size(self.window)
+        w, h = glfw.get_window_size(self.window)
+        return (max(w, 1), max(h, 1))
 
     def terminate(self):
         glfw.terminate()

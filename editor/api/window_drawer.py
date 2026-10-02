@@ -76,7 +76,20 @@ class WindowDrawer:
         self.top_bar = MenuBar(None)
         self.input = modules.input_handler()
 
+        self.lock_focus = False
+
         __class__.INITALIZED = True
+
+    def set_focus(self, new_window: Window):
+        if not new_window: return
+
+        if self.lock_focus: return
+        if self.focused_window and not self.focused_window.focused_elem: return
+
+        if self.focused_window: self.focused_window.lose_focus()
+        self.focused_window = new_window
+        self.focused_window.focus()
+        
 
     def render(self, editor: Window):
         width, height = glfw.get_window_size(glfw.get_current_context())
@@ -86,17 +99,7 @@ class WindowDrawer:
         WINDOW_SHADER.set_mat4("uProjection", ortho)
 
         focused = self.docker.INST.draw(editor)
-        if focused and self.focused_window != focused:                
-            if self.focused_window and not self.focused_window.focused_elem:
-                self.focused_window.lose_focus()
-                self.focused_window = focused
-                self.focused_window.focus()
-
-            else:
-                if self.focused_window:
-                    self.focused_window.lose_focus()
-                self.focused_window = focused
-                self.focused_window.focus()
+        self.set_focus(focused)
 
         if self.top_bar.size.x != editor.size()[0]:
             self.top_bar.resize(glm.vec2(editor.size()[0], 20))
@@ -112,10 +115,7 @@ class WindowDrawer:
                 continue
 
             if window.rect.collide_point(glm.vec2(*editor.input_handler.mouse_pos)):
-                if self.focused_window:
-                    self.focused_window.lose_focus()
-                self.focused_window = window
-                self.focused_window.focus()
+                self.set_focus(focused)
 
     def handle_input(self, key_codes: type[KeyCodes], mouse_buttons: type[MouseButtons], input_handler: Input):
         mouse_pos = glm.vec2(input_handler.mouse_pos)
@@ -128,6 +128,7 @@ class WindowDrawer:
         elif self.focused_window:
             self.focused_window.handle_input(key_codes, mouse_buttons, input_handler)
 
+            if self.lock_focus: return
             if not self.focused_window.rect.collide_point(mouse_pos):
                 self.focused_window.lose_focus()
                 self.focused_window = None
@@ -232,6 +233,10 @@ class EditorUiWindow:
     def __init_subclass__(cls):
         setattr(cls, "instances", set())
         EditorUiWindow.window_types.append(cls)
+
+    @classmethod
+    def setup(cls):
+        pass
 
     def __init__(self):
         self.logger = modules.logger(self.__class__.name.capitalize() if hasattr(self.__class__, "name") else self.__class__.__name__.capitalize())

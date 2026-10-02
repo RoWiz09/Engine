@@ -1,15 +1,17 @@
 from __future__ import annotations
 from ..core.logger import Logger
+from ..action import Action
 
-from typing import final
-from typing import TYPE_CHECKING, Any, TypeAlias
-
+from typing import TYPE_CHECKING, Any, TypeAlias, TypeVar
 if TYPE_CHECKING:
     from ..object import GameObject as object
     from .collider_type import CollisionInfo
 else:
     object: TypeAlias = Any
     collider: TypeAlias = Any
+
+from ..decorators import NonOverrideable
+from ..engine_type import EngineType
 
 class RegisterEditorButton:
     def __init__(self, func):
@@ -23,44 +25,6 @@ class RegisterEditorButton:
 
     def __call__(self, *args, **kwds):
         return self.function(*args, **kwds)
-    
-class NonOverrideable:
-    """
-        Makes the decorated method unable to be overridden.
-    """
-    def __init__(self, func):
-        self.func = func
-
-        self.inst = None
-        def wrapper(*args, **kwds):
-            return self.func(self.inst, *args, **kwds)
-        self.wrapped_func = wrapper
-
-    def __set_name__(self, owner: Behavior, name):        
-        if not getattr(owner, 'override-patched', False):
-            setattr(owner, 'orig-init-subclass', owner.__dict__['__init_subclass__'])
-            def wrapper(cls):
-                non_overrideable: dict[str, NonOverrideable] = getattr(owner, 'non-overrideable-methods', dict())
-                for name, method in non_overrideable.items():
-                    func = getattr(cls, name)
-                    if func and func != method:
-                        Logger("OVERRIDE PREVENTION").log_warning(f"{name} is marked as non-overrideable, yet was overriden by {cls.__name__}. It has been removed.")
-                        delattr(cls, name)
-
-                getattr(owner, 'orig-init-subclass').__func__(cls)
-            
-            owner.__init_subclass__ = classmethod(wrapper)
-            setattr(owner, 'non-overrideable-methods', dict())
-            setattr(owner, 'override-patched', True)
-
-        getattr(owner, 'non-overrideable-methods')[self.func.__name__] = self.wrapped_func
-    
-    def __call__(self, *args, **kwds):
-        return self.func(*args, **kwds)
-    
-    def __get__(self, instance, owner):
-        self.inst = instance
-        return self.wrapped_func
 
 class AdvancedBehavior:
     """
@@ -70,13 +34,13 @@ class AdvancedBehavior:
     def __init_subclass__(cls):
         if not issubclass(cls, Behavior):
             Logger("ADVANCED BEHAVIOR").log_fatal("Cannot use AdvancedBehavior on a non-behavior object!")
-        
+
         enabled = getattr(cls, "enabled", None)
         if isinstance(enabled, property):
             original_setter = enabled.fset
-            def new_enabled_setter(inst, val):
+            def new_enabled_setter(inst: AdvancedBehavior, val):
                 original_setter(inst, val)
-                inst.on_set_enabled()
+                inst.on_set_enabled(inst)
             
             cls.enabled = property(
                 enabled.fget,
@@ -86,14 +50,20 @@ class AdvancedBehavior:
             )
         
         else:
-            Logger("ADVANCED BEHAVIOR").log_error("Behavior.enabled attribute is not a property!")        
+            Logger("ADVANCED BEHAVIOR").log_error("Behavior.enabled attribute is not a property!")
 
-    def on_set_enabled(self):
-        pass
+    def __init__(self, gameobject):
+        try:
+            super().__init__(gameobject)
+        except:
+            super().__init__()
+
+        self.on_set_enabled = Action()
+        """Called when setting the behavior's enabled state. Listeners must take the behavior instance as an argument."""
     
     def on_editor_reload(self):
         """
-            A method called when the editor reloads scripts. This is not included in builds.
+            A method called when the editor reloads scripts.
         """
         pass
 
@@ -186,7 +156,7 @@ class RenderBehavior:
         """
         pass
 
-class Behavior:
+class Behavior(EngineType):
     """
     The basic class all game scripts are required to inherit from. Implements events for:
     - `update`: Called every 'update', or 'tick', during the game's runtime.
@@ -228,15 +198,27 @@ class Behavior:
 
         return new_inst
 
+    @staticmethod
+    def copy(base, gameobject: object):
+        new_inst = type(base)(gameobject)
+        for var in vars(base):
+            value = getattr(base, var)
+            setattr(new_inst, var, value)
+        return new_inst
+
     def __init__(self, gameobject: object):
-        try:
-            super().__init__(gameobject)
-        except:
-            super().__init__()
         self.__gameobject: object = gameobject
         self.__enabled = True
 
         self.behavior_instances[type(self)].add(gameobject)
+
+        self.on_destroy = Action()
+        """Called when this behavior instance is destroyed. Listeners must take a behavior instance as an argument."""
+
+        try:
+            super().__init__(gameobject)
+        except Exception as e:
+            super().__init__()
 
     def load(self):
         """
@@ -313,10 +295,24 @@ class Behavior:
 
     @NonOverrideable
     def destroy(self):
+        self.on_destroy(self)
         Behavior.behavior_instances[type(self)].remove(self.__gameobject)
 
     def __str__(self):
         return f"{self.__class__.__name__} at {self.gameobject.name}"
+
+    def instaniate[T: Behavior](ref: T) -> T:
+        object_: object = ref.gameobject.copy()
+
+        behaviors: list[Behavior] = []
+        for behavior in ref.gameobject.behaviors:
+            behaviors.append(type(behavior).copy(ref, object_))
+
+        object_.add_behaviors(behaviors)
+        for behavior in behaviors:
+            behavior.load()
+
+        return object_.get_behavior(type(ref))
 
 class EditorField:
     def __init__(self, field_type: type, default=None):
