@@ -104,6 +104,6 @@ Thumbs.db
 # Logs
 logs/
 
-# Game Packs
-*.rpk
-*.mrpk
+# Builds/Dists
+*.dist
+*.build

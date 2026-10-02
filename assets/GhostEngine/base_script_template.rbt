@@ -1,0 +1,10 @@
+from ghost_engine.scripting.behavior import Behavior
+
+class ClassName(Behavior):
+    def load(self):
+        # Code in this function will run upon loading a scene!
+        pass
+
+    def update(self, dt):
+        # Code in this function will run on every screen refresh!
+        return super().update(dt)

@@ -1,4 +1,12 @@
-name=testproj,
-dlc = {
-    dlc0: testproj
+{
+    "name":"testproj",
+    "dlc":{
+        "dlc0": {
+            "root": "testproj",
+            "rules": [
+                "--no-pyi-file"
+            ],
+            "exclude": []
+        }
+    }
 }

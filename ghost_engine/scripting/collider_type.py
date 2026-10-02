@@ -1,0 +1,32 @@
+from __future__ import annotations
+from .behavior import EditorField
+from ..object import GameObject
+
+from dataclasses import dataclass
+from pyglm import glm
+
+@dataclass
+class CollisionInfo:
+    source_collider: ColliderType
+    gameobject: GameObject
+    other_collider: ColliderType
+
+    simplex: list[glm.vec3]
+
+class ColliderType:
+    collisions_this_frame = []
+    collisions_last_frame = []
+
+    triggers_this_frame = []
+    triggers_last_frame = []
+
+    last_simplex: list[glm.vec3] = []
+
+    trigger_collider: bool
+
+    def __init_subclass__(cls):
+        field = EditorField(bool, False)
+        setattr(cls, "trigger_collider", field)
+
+    def get_last_simplex(self):
+        return self.last_simplex

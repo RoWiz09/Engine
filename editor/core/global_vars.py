@@ -1,0 +1,136 @@
+import importlib.util as import_util
+import os, sys
+import glfw
+
+import threading
+
+from typing import TYPE_CHECKING, TypeAlias, Any
+if TYPE_CHECKING:
+    from ghost_engine.core.logger import Logger
+    from ghost_engine.core.scene_manager import SceneManager
+    from ghost_engine.core.input import Input, KeyCodes, MouseButtons, CursorStates
+    from ghost_engine.scripting.behavior import EditorField, Behavior
+    from ghost_engine.core import logger as LoggerModule
+    from ghost_engine.core.packer import Pack, PathLike 
+    from ghost_engine.rendering.light_type import LightType
+
+    from ghost_engine.datatypes.engine_data_type import DataType, DisplayMethods
+
+    from ..editor import Window
+    from ghost_engine.action import Action
+
+
+    logger_module: LoggerModule = None
+    logger: type[Logger] = None
+
+    scene_manager: type[SceneManager] = None
+    scene_manager_type: TypeAlias = SceneManager
+
+    input_handler: type[Input] = None
+    key_codes: type[KeyCodes] = None
+    mouse_buttons: type[MouseButtons] = None
+    cursor_states: type[CursorStates] = None
+
+    editor_field: type[EditorField] = None
+    pack: type[Pack] = None
+
+    editor_window: Window = None
+
+    engine_data_type: type[DataType] = None
+    engine_display_methods: type[DisplayMethods] = None
+
+    behavior: type[Behavior] = None
+    behavior_alias: TypeAlias = Behavior
+    light_type: type[LightType] = None
+
+    action: type[Action] = None
+
+else:
+    logger_module: type = None
+    logger: type = None
+
+    scene_manager: type = None
+    scene_manager_type: TypeAlias = Any
+
+    input_handler: type = None
+    key_codes: type = None
+    mouse_buttons: type = None
+    cursor_states: type = None
+
+    editor_field: type = None
+    pack: type = None
+
+    editor_window = None
+
+    engine_data_type: type = None
+    engine_display_methods: type = None
+
+    behavior: type = None
+    behavior_alias: TypeAlias = Any
+    light_type: type = None
+
+    action: type = None
+
+from argparse import ArgumentParser
+
+current_cursor_type = glfw.ARROW_CURSOR
+
+ARGS = None
+def parse_args():
+    global ARGS
+    parser = ArgumentParser()
+    parser.add_argument("project", type=str)
+    parser.add_argument("--enable-console", action='store_true')
+    parser.add_argument("--task-limit", type=int, default=16)
+
+    ARGS = parser.parse_args()
+
+GL_FUNC_LOCK = threading.Lock()
+MAIN_PROC = False
+
+def get_modules(base_path: str):
+    global logger, logger_module, scene_manager, input_handler, key_codes, mouse_buttons, editor_field, pack
+    global engine_data_type, engine_display_methods, behavior, action, cursor_states, light_type
+
+    if base_path not in sys.path:
+        sys.path.insert(0, base_path)
+
+    def load_engine_module(name, rel_path, dotted_name):
+        full_path = os.path.join(base_path, *rel_path)
+        
+        if name in sys.modules:
+            return sys.modules[name]
+        
+        spec = import_util.spec_from_file_location(name, full_path)
+        module = import_util.module_from_spec(spec)
+        
+        module.__package__ = dotted_name
+        
+        sys.modules[name] = module
+        spec.loader.exec_module(module)
+        return module
+
+    # Import Logger
+    init_module = load_engine_module("__init__", ["ghost_engine", "__init__.py"], "ghost_engine")
+    logger = getattr(init_module, "Logger")
+    logger_module = sys.modules["ghost_engine.core.logger"]
+    scene_manager = getattr(init_module, "SceneManager")
+    input_handler = getattr(init_module, "Input") 
+
+    key_codes = getattr(init_module, "KeyCodes")
+    mouse_buttons = getattr(init_module, "MouseButtons")
+    cursor_states = getattr(init_module, "CursorStates")
+
+    editor_field = getattr(sys.modules["ghost_engine.scripting.behavior"], "EditorField")
+    pack = getattr(sys.modules["ghost_engine.core.packer"], "Pack")
+
+    engine_data_type = getattr(sys.modules["ghost_engine.datatypes.engine_data_type"], "DataType")
+    engine_display_methods = getattr(sys.modules["ghost_engine.datatypes.engine_data_type"], "DisplayMethods")
+
+    behavior = getattr(sys.modules["ghost_engine.scripting.behavior"], "Behavior")
+    light_type = getattr(sys.modules["ghost_engine.rendering.light_type"], "LightType")
+    action = getattr(sys.modules["ghost_engine.action"], "Action")
+
+    return logger, scene_manager, input_handler
+
+

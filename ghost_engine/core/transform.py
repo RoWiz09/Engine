@@ -1,0 +1,153 @@
+from typing_extensions import overload
+from pyglm import glm
+from typing import TYPE_CHECKING, TypeAlias, Any
+if TYPE_CHECKING:
+    from ..object import GameObject
+
+else:
+    GameObject: TypeAlias = Any
+
+import numpy as np
+
+WORLD_UP = glm.vec3(0, 1, 0)
+
+class Transform:
+    def __init__(self, pos: glm.vec3 = glm.vec3(0.0),
+                       rot: glm.vec3 = glm.vec3(0),
+                       scale: glm.vec3 = glm.vec3(1.0),
+                       parent = None):
+        self.__pos = pos
+
+        self.__rot = rot
+
+        self.scale = scale
+
+        self.__parent: Transform = parent
+        self.gameobject: GameObject = None
+
+    def copy_state(self):
+        pos = glm.vec3(self.localpos)
+        rot = glm.vec3(self.localrot)
+        scale = glm.vec3(self.scale)
+        return pos, rot, scale
+
+    @property
+    def pos(self):
+        if self.__parent:
+            return self.__parent.pos + (self.__parent.rot * self.localpos)
+
+        return self.__pos 
+    
+    @property
+    def localpos(self):
+        return self.__pos
+    
+    @localpos.setter
+    def localpos(self, value):
+        self.__pos = value
+
+    @property
+    def quaternion_rot(self):
+        return glm.quat(glm.radians(self.__rot))
+    
+    @property
+    def rot(self):
+        if self.__parent:
+            return self.parent.rot * self.quaternion_rot
+        
+        return self.quaternion_rot
+    
+    @property
+    def worldrot(self) -> glm.vec3:
+        if self.__parent:
+            return self.__rot + self.parent.worldrot
+        
+        return self.__rot
+    
+    @property
+    def localrot(self):
+        return self.__rot
+
+    @localrot.setter
+    def localrot(self, value):
+        self.__rot = value
+    
+    @property
+    def local_quatrot(self):
+        return glm.quat(glm.radians(self.__rot))
+
+    @property
+    def parent(self):
+        return self.__parent
+    
+    @parent.setter
+    def parent(self, value):
+        if self.__parent:
+            self.__parent.gameobject.children.remove(self.gameobject)
+        self.__parent = value
+        if self.__parent:
+            self.__parent.gameobject.children.append(self.gameobject)
+
+    def get_model_matrix(self) -> glm.mat4:
+        # Start with identity
+        model = glm.mat4(1.0)
+
+        # Apply translation
+        model = glm.translate(model, self.pos)
+
+        # Apply rotation (convert quaternion to mat4)
+        model = model * glm.mat4_cast(self.rot)
+
+        # Apply scale
+        model = glm.scale(model, self.scale)
+
+        return model
+
+    @property
+    def front(self):
+        return self.rot * glm.vec3(0, 0, 1)
+    
+    @property
+    def forward(self):
+        return self.front
+
+    @property
+    def right(self):
+        return glm.cross(self.front, self.up)
+
+    @property
+    def up(self):
+        return self.rot * WORLD_UP
+
+    def move(self, dx: float = 0, dy: float = 0, dz: float = 0):
+        delta = glm.vec3(dx, dy, dz)
+
+        self.__pos += delta
+
+    def move_by_vec3(self, delta: glm.vec3): 
+        self.__pos += delta
+
+    @overload
+    def move_with_rotation(self, dx:float, dy:float, dz:float): ...
+
+    @overload
+    def move_with_rotation(self, delta: glm.vec3): ...
+
+    def move_with_rotation(self, dx: float = 0, dy: float = 0, dz: float = 0, delta: glm.vec3 = glm.vec3(0)):
+        if delta == glm.vec3(0):
+            delta = glm.vec3(dx, dy, dz)
+
+        self.__pos += delta * self.rot
+
+    @overload
+    def rotate_by_degrees(self, dx: float, dy: float, dz: float): ...
+
+    @overload
+    def rotate_by_degrees(self, degrees: glm.vec3): ...
+
+    def rotate_by_degrees(self, dx: float = 0, dy: float = 0, dz: float = 0, degrees: glm.vec3 = glm.vec3(0)):
+        if degrees == glm.vec3(0):
+            degrees = glm.vec3(dx, dy, dz)
+
+        self.__rot += degrees
+
