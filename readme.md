@@ -15,7 +15,7 @@ In the future, even more features will be added, such as different render pipeli
 To run the editor, use Python 3.13 to run Editor/editor.py, and add an argument for the target project's path.
 
 ### Editor Windows:
-The editor itself consists of many individual panes, or 'windows'. 
+The editor itself consists of many individual panes, or 'windows'. Each window allows the user to access or view different information, to make game development less challenging.
 
 #### Hierarchy:
 The Hierarchy is a list of all game objects, and their associated parents. This currently doesn't update mid-test, but that is a planned feature in the future. 
