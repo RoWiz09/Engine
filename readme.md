@@ -4,6 +4,12 @@ A custom, open-source game engine built using Python, PyOpengl, and GLFW.
 ## Recent Updates:
 The first version of the editor has released! It took six months, and probably still has a lot of bugs.
 
+## Engine:
+### Features:
+The engine has a long list of features currently implemented, with more planned as development continues. It currently features easy scene management, game objects with behaviors and names, methods to find game objects with behaviors, custom behaviors, and more.
+
+In the future, even more features will be added, such as different render pipelines (Vulkan and possibly DirectX), easier mesh management, and fully functional rigid bodies.
+
 ## Editor:
 ### How to use:
 To run the editor, use Python 3.13 to run Editor/editor.py, and add an argument for the target project's path.
