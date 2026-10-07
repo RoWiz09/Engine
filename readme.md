@@ -2,7 +2,7 @@
 A custom, open-source game engine built using Python, PyOpengl, and GLFW. 
 
 ## Recent Updates:
-The first version of the editor has released! It took six months, and probably still has a lot of bugs.
+The first version of the editor has released! It took six months, and probably still has a lot of bugs. But it allows direct editing access to scenes, as well as changing meshes and positions of objects without editing any raw data.
 
 ## Engine:
 ### Features:
