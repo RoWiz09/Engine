@@ -27,4 +27,4 @@ The Inspector allows you to view and edit all data for any given object, as well
 The Scene View allows you to view the scene in the same way it would look in a compiled version of the game. This reflects all changes made in the Inspector window.
 
 #### Game View:
-The Game View allows you to run/pause/stop the game. This, unlike the Scene View, will cause game updates, which leads to component updates.
+The Game View allows you to run/pause/stop the game. While running, scene updates will occur, and you'll be able to playtest your changes without compiling the full game executable.

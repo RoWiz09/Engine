@@ -150,11 +150,9 @@ class Button(UiElement):
 class TextButton(UiElement):
     can_claim_focus = True
 
-    def __init__(self, parent, width, height, text, click_callback, **kwrds):
+    def __init__(self, parent, width, height, text, **kwrds):
         self.edge_offset = [0, 0]
         self.text = text
-
-        self.click_callback = click_callback
 
         self.color = (220, 220, 220)
         self.focused_color = (255, 255, 255)
@@ -168,6 +166,7 @@ class TextButton(UiElement):
         self.text_size = None
         super().__init__(parent, width, height, **kwrds)
 
+        self.click_callback = self.on_left_click
         self.was_focused = self.focused
 
     def bold(self):
@@ -216,9 +215,6 @@ class TextButton(UiElement):
     def handle_input(self, keycodes, mouse_buttons, input_handler):
         super().handle_input(keycodes, mouse_buttons, input_handler)
         modules.current_cursor_type = glfw.POINTING_HAND_CURSOR
-        if input_handler.get_mouse_button_up(mouse_buttons.LEFT):
-            if self.click_callback:
-                self.click_callback()
 
 class InputField(UiElement):
     can_claim_focus = True
@@ -772,7 +768,7 @@ class SimpleDropdown(UiElement):
         self.color = color
         self.selected_col = selected_color
 
-        self.open_callback = None
+        self.open_callback = modules.action()
 
         super().__init__(parent, width, height, **kwrds)
 

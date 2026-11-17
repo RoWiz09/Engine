@@ -357,12 +357,26 @@ class DropdownButton(UiElement):
 
         self.__base_height = base_height
 
-        self.label = TextButton(None, width - base_height, base_height, text, kwrds.pop("button_click_func", None))
+        self.label = TextButton(None, width - base_height, base_height, text)
         self.dropdown = SimpleDropdown(None, base_height, base_height)
         def set_state(state):
             self.open = state
 
-        self.dropdown.open_callback = set_state
+            if self.open:
+                if self.auto_populate:
+                    self.elems = self.auto_populate_func(self.label.edge_offset[0] + 10)
+                    for elem in self.elems:
+                        elem.resize(glm.vec2(self.size.x, self.__base_height))
+
+                for elem in self.elems:
+                    self.size.y += self.y_padding + elem.get_height()
+            else:
+                self.size.y = self.__base_height
+                if self.auto_populate:
+                    self.elems.clear()
+            self.rect.size.y = self.size.y
+
+        self.dropdown.open_callback += set_state
 
         self.focused_elem = None
         
@@ -393,22 +407,10 @@ class DropdownButton(UiElement):
         self.dropdown.draw(editor, pos + glm.vec2(self.label.size.x, 0))
 
         if self.open:
-            self.size.y = self.__base_height
-            if self.auto_populate and self.elems == []:
-                self.elems = self.auto_populate_func(self.label.edge_offset[0] + 10)
-                for elem in self.elems:
-                    elem.resize(self.size)
-
             pos.y += self.__base_height + self.y_padding
-
-            for idx, elem in enumerate(self.elems):
+            for elem in self.elems:
                 elem.draw(editor, pos)
-
                 pos.y += elem.get_height()
-                self.size.y += self.y_padding + elem.get_height()
-
-        else:
-            self.size.y = self.__base_height
 
     def lose_focus(self):
         super().lose_focus()

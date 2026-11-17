@@ -117,12 +117,9 @@ class Inspector(EditorUiWindow):
 		popup.register()
 	
 	async def build_for_object(self, data):
-		print("WOW!")
 		if TYPE_CHECKING:
 			assert isinstance(self.object_type, type[GameObject])
 			assert isinstance(data, GameObject)
-
-		print("WOW!")
 		self.open_data = data
 
 		def set_name(name_in: InputField):
@@ -150,7 +147,7 @@ class Inspector(EditorUiWindow):
 		def try_set_parent(parentField: DropField):
 			if not parentField.get_value():
 				data.transform.parent = None
-				Hierarchy.rebuild_windows()
+				Hierarchy.start_rebuild()
 				return
 			
 			if parentField.get_value().object_data in get_children(data):
@@ -163,7 +160,7 @@ class Inspector(EditorUiWindow):
 				parentField.data = None
 				return
 			data.transform.parent = parentField.get_value().object_data.transform
-			Hierarchy.rebuild_windows()
+			Hierarchy.start_rebuild()
 		parentField.on_value_change = try_set_parent
 		build_vec3_input(self, data.transform.localpos, "Position")
 		build_vec3_input(self, data.transform.localrot, "Rotation")
@@ -231,7 +228,6 @@ class Inspector(EditorUiWindow):
 
 		add_comp_button = Button(self, self.renderable_width, 20, "Add Behavior", None)
 		add_comp_button.on_left_click += lambda b = add_comp_button: self.open_component_popup(b.rect.pos)
-		print("Working?")
 
 	async def build(self, data):
 		self.scroll = 0.0
@@ -255,6 +251,54 @@ class Inspector(EditorUiWindow):
 class Hierarchy(EditorUiWindow):
 	name = "Hierarchy"
 
+	class HierarchyObject(UiElement):
+		can_claim_focus = True
+		def __init__(self, object: GameObject, parent, width, height, **kwrds):
+			super().__init__(parent, width, height, **kwrds)
+
+			self.object = object
+			if len(object.children) == 0:
+				self.label = TextButton(None, width, height, object.name)
+				self.label.on_left_click += lambda b: Inspector.set_data(self.object)
+			else:
+				self.label = DropdownButton(None, width, height, object.name)
+				self.label.label.on_left_click += lambda b: Inspector.set_data(self.object)
+				self.label.auto_populate = True
+				self.label.auto_populate_func = lambda offset: self.build_layer(self.object, None, self.size.x, offset)
+
+			self.rect = self.label.rect
+			self.draggable_data = DragData(self.object, self.object.name)
+
+		def get_height(self):
+			return self.label.size.y
+		
+		@classmethod
+		def build_layer(cls, layer: GameObject | list[GameObject], parent: EditorUiWindow = None, width: int = 0, offset: int = 0) -> list[Hierarchy.HierarchyObject]:
+			buttons = []
+			if isinstance(layer, list):
+				for object_ in layer:
+					hierarchy_obj = cls(object_, parent, parent.renderable_width if parent else width, 12)
+					hierarchy_obj.pos_offset.x = offset
+					buttons.append(hierarchy_obj)
+			else:
+				for child in layer.children:
+					hierarchy_obj = cls(child, parent, parent.renderable_width if parent else width, 12)
+					hierarchy_obj.pos_offset.x = offset
+					buttons.append(hierarchy_obj)
+			return buttons
+
+		def resize(self, size, rebuild_sprite = True):
+			self.label.resize(size, rebuild_sprite)
+			return super().resize(size, rebuild_sprite)
+
+		def draw(self, editor, pos):
+			if self.rect.pos != pos:
+				self.rect.move_to(glm.vec2(*pos))
+			self.label.draw(editor, pos)
+
+		def handle_input(self, keycodes, mouse_buttons, input_handler):
+			self.label.handle_input(keycodes, mouse_buttons, input_handler)
+
 	@classmethod
 	def setup(cls):
 		global_vars.scene_manager().on_scene_load += cls.start_rebuild
@@ -267,13 +311,11 @@ class Hierarchy(EditorUiWindow):
 		self.regen_stencil()
 
 		self.manager = global_vars.scene_manager()
-		self.object_buttons: set[Button] = set()
 
 		self.object_type = None
 		self.create_object_button: Button = Button(self, 100, 30, "Create Gameobject", self.create_object)
 
 		Hierarchy.instances.add(self)
-
 		asyncio.run(self.build())
 
 		self.old = False
@@ -293,31 +335,16 @@ class Hierarchy(EditorUiWindow):
 
 	async def build(self):
 		self.old = False
-		self.object_buttons.clear()
 		self.ui_elements.clear()
 
 		self.ui_elements.append(self.create_object_button)
 
 		if not self.manager.scene: return
 		root_objects = list(filter(lambda object_: object_.transform.parent == None, self.manager.scene.game_objects))
-		def build_layer(objects: list, width):
-			for obj in objects:
-				button = Button(self, width, 30, obj.name, None)
-				button.on_left_click += lambda b, obj_ = obj: Inspector.set_data(obj_)
-
-				button.pos_offset = glm.vec2((self.draw_data.size.x - self.draw_data.padding.x * 2) - width, 0)
-
-				button.draggable_data = DragData(obj, obj.name)
-
-				build_layer(obj.children, max(20, width-20))
-				self.object_buttons.add(button)
-
-			return True
-
-		build_layer(root_objects, self.draw_data.size.x - self.draw_data.padding.x * 2)
+		self.HierarchyObject.build_layer(root_objects, self)
 
 	@classmethod
-	def start_rebuild(cls, _):
+	def start_rebuild(cls, _ = None):
 		if is_inside_async_loop():
 			cls.rebuild_windows().send(None)
 		else:
@@ -334,8 +361,11 @@ class Hierarchy(EditorUiWindow):
 
 	def draw(self, editor):	
 		if self.old:
-			self.start_rebuild(None)
+			self.start_rebuild()
 		super().draw(editor)
+
+	def handle_input(self, key_codes, mouse_buttons, input_handler):
+		return super().handle_input(key_codes, mouse_buttons, input_handler)
 
 class Scenes(EditorUiWindow):
 	name = "Scenes"
@@ -508,7 +538,8 @@ class FileViewer(EditorUiWindow):
 			subdirectories = get_subdirectories(pkg)
 			for subpkg in subdirectories:
 				if get_subdirectories(subpkg):
-					elems.append(dropdown:=DropdownButton(None, 75, 12, subpkg.name, button_click_func=lambda pkg_=subpkg: self.route_to(pkg_)))
+					elems.append(dropdown:=DropdownButton(None, 75, 12, subpkg.name))
+					dropdown.label.on_left_click += lambda pkg_=subpkg: self.route_to(pkg_)
 					dropdown.auto_populate = True
 					dropdown.auto_populate_func = lambda o, pkg_=subpkg: autofill_dropdown(pkg_, o)
 
@@ -517,7 +548,8 @@ class FileViewer(EditorUiWindow):
 					dropdown.label.rebuild_texture()
 
 				else:
-					elems.append(button := TextButton(None, 75, 12, subpkg.name, lambda pkg_=subpkg: self.route_to(pkg_)))
+					elems.append(button := TextButton(None, 75, 12, subpkg.name))
+					button.on_left_click += lambda o, pkg_=subpkg: self.route_to(pkg_)
 					button.edge_offset[0] += offset
 
 					button.sprite = button.build_sprite()
@@ -531,12 +563,14 @@ class FileViewer(EditorUiWindow):
 			if pkg.name in self.excluded_directories: continue
 
 			if get_subdirectories(pkg):
-				self.sidebar.append(dropdown:=DropdownButton(None, 75, 12, pkg.name, button_click_func=lambda pkg_=pkg: self.route_to(pkg_)))
+				self.sidebar.append(dropdown:=DropdownButton(None, 75, 12, pkg.name))
 
+				dropdown.label.on_left_click += lambda pkg_=pkg: self.route_to(pkg_)
 				dropdown.auto_populate = True
 				dropdown.auto_populate_func = lambda o, pkg_=pkg: autofill_dropdown(pkg_, o)
 			else:
-				self.sidebar.append(TextButton(None, 75, 12, pkg.name, lambda pkg_=pkg: self.route_to(pkg_)))
+				self.sidebar.append(txt_button := TextButton(None, 75, 12, pkg.name))
+				txt_button.on_left_click += lambda o, pkg_=pkg: self.route_to(pkg_)
 
 			# self.sidebar.append(HorizontalLine(None, width=75, height=2))
 		self.sidebar.reverse()
@@ -700,7 +734,6 @@ class Game(EditorUiWindow):
 
 		else:
 			self.scene_manager.unload_scene()
-			print(self.scene_manager.scene.game_objects, modules.behavior.behavior_instances)
 
 			self.scene_manager.scene = self.scene_manager.__last_state__
 			modules.light_type.lights = self.scene_manager.__last_light_state__
